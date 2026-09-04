@@ -6,10 +6,12 @@ import {
   Flower2, 
   Square, 
   Moon, 
-  Sun 
+  Sun,
+  Database
 } from 'lucide-react';
 import { TimeTracker } from './components/TimeTracker/TimeTracker';
 import { ClientProjectManager } from './components/Projects/ClientProjectManager';
+import { SupabaseModal } from './components/Supabase/SupabaseModal';
 import { useTimerStore } from './store/useTimerStore';
 import { useWorkflowStore } from './store/useWorkflowStore';
 import { formatDuration, formatCurrency } from './utils/formatters';
@@ -20,13 +22,26 @@ export function App() {
   const [activeScreen, setActiveScreen] = useState<'tracker' | 'projects'>('tracker');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState<boolean>(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
   const [rachesInitialPrompt, setRachesInitialPrompt] = useState<string | undefined>();
 
   const { status, projectId, taskId, getElapsedSeconds, stopTimer } = useTimerStore();
-  const { projects, tasks, getUnbilledSummary } = useWorkflowStore();
+  const { 
+    projects, 
+    tasks, 
+    getUnbilledSummary, 
+    supabaseStatus, 
+    isSyncing, 
+    initSupabaseSync 
+  } = useWorkflowStore();
   const unbilled = getUnbilledSummary();
 
   const [headerTimerSeconds, setHeaderTimerSeconds] = useState(0);
+
+  // Initialize Supabase sync on app mount
+  useEffect(() => {
+    initSupabaseSync();
+  }, [initSupabaseSync]);
 
   // Keep top-bar persistent timer in sync
   useEffect(() => {
@@ -116,8 +131,33 @@ export function App() {
             </button>
           </nav>
 
-          {/* Persistent Active Timer & Raches Trigger Strip */}
-          <div className="flex items-center gap-3">
+          {/* Persistent Active Timer, Supabase Cloud & Raches Trigger Strip */}
+          <div className="flex items-center gap-2.5">
+            {/* Supabase Cloud Connection Status Button */}
+            <button
+              onClick={() => setIsSupabaseModalOpen(true)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition active:scale-95 ${
+                supabaseStatus === 'connected'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                  : supabaseStatus === 'checking' || isSyncing
+                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 animate-pulse'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400 shadow-sm'
+              }`}
+              title="Configure Supabase Cloud Database"
+            >
+              <Database className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span className="hidden sm:inline">
+                {supabaseStatus === 'connected' 
+                  ? 'Cloud Synced' 
+                  : supabaseStatus === 'checking' || isSyncing 
+                  ? 'Syncing...' 
+                  : 'Connect Supabase'}
+              </span>
+              {supabaseStatus === 'connected' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              )}
+            </button>
+
             {/* Rebranded Raches (Rachel) Trigger Button (Sky blue, White & Floral) */}
             <button
               onClick={() => {
@@ -185,6 +225,12 @@ export function App() {
         appContext={appContext}
         initialPrompt={rachesInitialPrompt}
         onClearInitialPrompt={() => setRachesInitialPrompt(undefined)}
+      />
+
+      {/* --- SUPABASE CONFIGURATION MODAL --- */}
+      <SupabaseModal 
+        isOpen={isSupabaseModalOpen} 
+        onClose={() => setIsSupabaseModalOpen(false)} 
       />
     </div>
   );

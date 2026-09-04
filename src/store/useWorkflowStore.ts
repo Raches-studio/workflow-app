@@ -8,8 +8,8 @@ import {
   TimeLog, 
   CreateClientDTO, 
   CreateProjectDTO, 
-  CreateTimeLogDTO,
-  TaskStatus
+  CreateTimeLogDTO, 
+  TaskStatus 
 } from '../types';
 import { 
   INITIAL_CLIENTS, 
@@ -17,12 +17,26 @@ import {
   INITIAL_TASKS, 
   INITIAL_TIMELOGS 
 } from '../mockData/initialData';
+import { SupabaseService } from '../services/supabaseService';
+import { getSupabaseConfig, testSupabaseConnection } from '../lib/supabase';
+
+export type SupabaseConnectionStatus = 'idle' | 'checking' | 'connected' | 'error' | 'unconfigured';
 
 interface WorkflowState {
   clients: Client[];
   projects: Project[];
   tasks: Task[];
   timeLogs: TimeLog[];
+
+  // Supabase cloud status
+  supabaseStatus: SupabaseConnectionStatus;
+  supabaseMessage?: string;
+  isSyncing: boolean;
+
+  // Supabase Actions
+  initSupabaseSync: () => Promise<void>;
+  syncLocalDataToCloud: () => Promise<{ success: boolean; message: string }>;
+  setSupabaseStatus: (status: SupabaseConnectionStatus, message?: string) => void;
 
   // Client CRUD
   addClient: (dto: CreateClientDTO) => Client;
@@ -74,6 +88,108 @@ export const useWorkflowStore = create<WorkflowState>()(
       tasks: INITIAL_TASKS,
       timeLogs: INITIAL_TIMELOGS,
 
+      // Cloud status
+      supabaseStatus: 'idle',
+      supabaseMessage: undefined,
+      isSyncing: false,
+
+      setSupabaseStatus: (status: SupabaseConnectionStatus, message?: string) => {
+        set({ supabaseStatus: status, supabaseMessage: message });
+      },
+
+      /**
+       * Connect and sync with Supabase on app initialization
+       */
+      initSupabaseSync: async () => {
+        const config = getSupabaseConfig();
+        if (!config.isConfigured) {
+          set({
+            supabaseStatus: 'unconfigured',
+            supabaseMessage: 'Supabase credentials not configured yet. Running in offline/local storage mode.',
+          });
+          return;
+        }
+
+        set({ supabaseStatus: 'checking', isSyncing: true });
+
+        const testRes = await testSupabaseConnection();
+        if (!testRes.success) {
+          set({
+            supabaseStatus: 'error',
+            supabaseMessage: testRes.message,
+            isSyncing: false,
+          });
+          return;
+        }
+
+        // Fetch cloud data from Supabase
+        const cloudData = await SupabaseService.fetchAllData();
+        if (cloudData) {
+          // If cloud has data, update state with cloud data
+          const hasCloudRecords = 
+            cloudData.clients.length > 0 || 
+            cloudData.projects.length > 0 || 
+            cloudData.tasks.length > 0 || 
+            cloudData.timeLogs.length > 0;
+
+          if (hasCloudRecords) {
+            set({
+              clients: cloudData.clients,
+              projects: cloudData.projects,
+              tasks: cloudData.tasks,
+              timeLogs: cloudData.timeLogs,
+              supabaseStatus: 'connected',
+              supabaseMessage: 'Connected and synchronized with Supabase cloud database.',
+              isSyncing: false,
+            });
+            return;
+          } else {
+            // Database exists but is empty -> seed with current local state
+            set({
+              supabaseStatus: 'connected',
+              supabaseMessage: 'Connected to Supabase. Database tables are empty and ready for data.',
+              isSyncing: false,
+            });
+            return;
+          }
+        }
+
+        set({
+          supabaseStatus: 'connected',
+          supabaseMessage: testRes.message,
+          isSyncing: false,
+        });
+      },
+
+      /**
+       * Manually push existing local data to Supabase
+       */
+      syncLocalDataToCloud: async () => {
+        set({ isSyncing: true });
+        const { clients, projects, tasks, timeLogs } = get();
+        const res = await SupabaseService.seedLocalDataToSupabase({
+          clients,
+          projects,
+          tasks,
+          timeLogs,
+        });
+
+        if (res.success) {
+          set({
+            supabaseStatus: 'connected',
+            supabaseMessage: res.message,
+            isSyncing: false,
+          });
+        } else {
+          set({
+            supabaseStatus: 'error',
+            supabaseMessage: res.message,
+            isSyncing: false,
+          });
+        }
+        return res;
+      },
+
       // --- CLIENT CRUD ---
       addClient: (dto: CreateClientDTO) => {
         const newClient: Client = {
@@ -92,6 +208,14 @@ export const useWorkflowStore = create<WorkflowState>()(
         };
 
         set((state) => ({ clients: [newClient, ...state.clients] }));
+
+        // Async sync to Supabase if connected
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.insertClient(newClient).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+
         return newClient;
       },
 
@@ -101,14 +225,25 @@ export const useWorkflowStore = create<WorkflowState>()(
             c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c
           ),
         }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.updateClient(id, updates).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
       },
 
       deleteClient: (id: string) => {
         set((state) => ({
           clients: state.clients.filter((c) => c.id !== id),
-          // Cascade or retain projects depending on policy - here we flag/filter
           projects: state.projects.filter((p) => p.clientId !== id),
         }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.deleteClient(id).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
       },
 
       // --- PROJECT CRUD ---
@@ -131,6 +266,13 @@ export const useWorkflowStore = create<WorkflowState>()(
         };
 
         set((state) => ({ projects: [newProject, ...state.projects] }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.insertProject(newProject).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+
         return newProject;
       },
 
@@ -140,6 +282,12 @@ export const useWorkflowStore = create<WorkflowState>()(
             p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
           ),
         }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.updateProject(id, updates).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
       },
 
       deleteProject: (id: string) => {
@@ -148,6 +296,12 @@ export const useWorkflowStore = create<WorkflowState>()(
           tasks: state.tasks.filter((t) => t.projectId !== id),
           timeLogs: state.timeLogs.filter((tl) => tl.projectId !== id),
         }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.deleteProject(id).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
       },
 
       // --- TASK CRUD ---
@@ -168,6 +322,13 @@ export const useWorkflowStore = create<WorkflowState>()(
         };
 
         set((state) => ({ tasks: [...state.tasks, newTask] }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.insertTask(newTask).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+
         return newTask;
       },
 
@@ -177,12 +338,24 @@ export const useWorkflowStore = create<WorkflowState>()(
             t.id === taskId ? { ...t, status, updatedAt: new Date().toISOString() } : t
           ),
         }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.updateTaskStatus(taskId, status).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
       },
 
       deleteTask: (taskId: string) => {
         set((state) => ({
           tasks: state.tasks.filter((t) => t.id !== taskId),
         }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.deleteTask(taskId).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
       },
 
       // --- TIME LOG CRUD ---
@@ -211,6 +384,13 @@ export const useWorkflowStore = create<WorkflowState>()(
         };
 
         set((state) => ({ timeLogs: [newLog, ...state.timeLogs] }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.insertTimeLog(newLog).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+
         return newLog;
       },
 
@@ -218,6 +398,12 @@ export const useWorkflowStore = create<WorkflowState>()(
         set((state) => ({
           timeLogs: state.timeLogs.filter((tl) => tl.id !== id),
         }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.deleteTimeLog(id).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
       },
 
       markTimeLogsInvoiced: (logIds: string[], invoiceId: string) => {
@@ -228,6 +414,12 @@ export const useWorkflowStore = create<WorkflowState>()(
               : tl
           ),
         }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.markTimeLogsInvoiced(logIds, invoiceId).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
       },
 
       // --- SELECTORS & ANALYTICS ---
@@ -288,6 +480,12 @@ export const useWorkflowStore = create<WorkflowState>()(
     {
       name: 'workflow-storage',
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        clients: state.clients,
+        projects: state.projects,
+        tasks: state.tasks,
+        timeLogs: state.timeLogs,
+      }),
     }
   )
 );
