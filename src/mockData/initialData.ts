@@ -1,5 +1,5 @@
 // src/mockData/initialData.ts
-import { Client, Project, Task, TimeLog, Invoice } from '../types';
+import { Client, Project, Task, TimeLog, Invoice, PaymentSettings } from '../types';
 
 export const INITIAL_CLIENTS: Client[] = [
   {
@@ -12,6 +12,7 @@ export const INITIAL_CLIENTS: Client[] = [
     currency: 'USD',
     hourlyRate: 95,
     paymentTermsDays: 14,
+    portalToken: 'cp_acme_demo_token',
     notes: 'Key client for brand design and web engineering. Invoices sent bi-weekly.',
     createdAt: new Date(Date.now() - 60 * 86400000).toISOString(),
     updatedAt: new Date().toISOString(),
@@ -26,6 +27,7 @@ export const INITIAL_CLIENTS: Client[] = [
     currency: 'USD',
     hourlyRate: 110,
     paymentTermsDays: 30,
+    portalToken: 'cp_fintech_demo_token',
     notes: 'Mobile app development for investment platform.',
     createdAt: new Date(Date.now() - 45 * 86400000).toISOString(),
     updatedAt: new Date().toISOString(),
@@ -39,6 +41,7 @@ export const INITIAL_CLIENTS: Client[] = [
     currency: 'EUR',
     hourlyRate: 85,
     paymentTermsDays: 15,
+    portalToken: 'cp_nordic_demo_token',
     notes: 'Shopify Plus theme revamp & custom app integration.',
     createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
     updatedAt: new Date().toISOString(),
@@ -181,6 +184,9 @@ export const INITIAL_TIMELOGS: TimeLog[] = [
     hourlyRate: 95,
     isInvoiced: true,
     invoiceId: 'inv-sample-1',
+    approvalStatus: 'approved',
+    reviewedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    reviewedBy: 'Admin',
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -197,6 +203,8 @@ export const INITIAL_TIMELOGS: TimeLog[] = [
     isBillable: true,
     hourlyRate: 95,
     isInvoiced: false, // Unbilled!
+    approvalStatus: 'submitted',
+    submittedAt: new Date(Date.now() - 86400000).toISOString(),
     createdAt: new Date(Date.now() - 86400000).toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -213,6 +221,7 @@ export const INITIAL_TIMELOGS: TimeLog[] = [
     isBillable: true,
     hourlyRate: 110,
     isInvoiced: false, // Unbilled!
+    approvalStatus: 'draft',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -285,4 +294,22 @@ export const INITIAL_INVOICES: Invoice[] = [
     updatedAt: new Date().toISOString(),
   },
 ];
+
+export const INITIAL_PAYMENT_SETTINGS: PaymentSettings = {
+  userId: 'user-default',
+  activeProvider: 'paypal',
+  paypalEmail: 'billing@workerhub.pro',
+  paypalClientId: 'client_id_demo_paypal_99',
+  paystackPublicKey: 'pk_test_paystack_demo_123',
+  paystackSecretKey: 'sk_test_paystack_demo_456',
+  flutterwavePublicKey: 'FLWPUBK_TEST-flutterwave-demo',
+  bankName: 'Silicon Valley Commercial Bank',
+  accountName: 'WorkerHub Creative Studio LLC',
+  accountNumber: '9876543210',
+  routingOrSortCode: '121000358',
+  swiftBic: 'SVCBUS33',
+  paymentInstructions: 'Please include the invoice number in your bank wire reference line.',
+  customPaymentUrl: 'https://buy.stripe.com/test_workerhub_demo',
+  isConfigured: true,
+};
 

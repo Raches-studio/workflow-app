@@ -16,6 +16,7 @@ export interface Client {
   currency: string; // e.g. 'USD', 'EUR', 'GBP'
   hourlyRate?: number; // default client hourly rate fallback
   paymentTermsDays: number; // e.g. 14, 30
+  portalToken?: string; // unique token for secure client portal access
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -71,6 +72,8 @@ export interface Task {
   updatedAt: string;
 }
 
+export type ApprovalStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+
 export interface TimeLog {
   id: string;
   userId: string;
@@ -85,6 +88,12 @@ export interface TimeLog {
   hourlyRate: number;
   isInvoiced: boolean;
   invoiceId?: string;
+  // Phase 3: Approval Workflows
+  approvalStatus: ApprovalStatus;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  rejectionReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -110,6 +119,7 @@ export interface CreateClientDTO {
   currency?: string;
   hourlyRate?: number;
   paymentTermsDays?: number;
+  portalToken?: string;
   notes?: string;
 }
 
@@ -245,8 +255,10 @@ export interface AIMessage {
   };
 }
 
+export type UserRole = 'admin' | 'manager' | 'member';
+
 export interface CurrentAppContext {
-  currentPage: 'tracker' | 'projects' | 'invoices';
+  currentPage: 'tracker' | 'projects' | 'invoices' | 'approvals' | 'portal';
   activeProjectId?: string;
   activeProjectName?: string;
   activeTaskId?: string;
@@ -264,6 +276,7 @@ export interface UserProfile {
   fullName: string;
   businessName?: string;
   email: string;
+  role: UserRole; // 'admin' | 'manager' | 'member' (default: 'admin')
   avatarUrl?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -279,6 +292,37 @@ export interface SignUpCredentials {
   email: string;
   password: string;
   businessName?: string;
+}
+
+// ==========================================
+// Multi-Gateway Payment Settings Types
+// ==========================================
+
+export type PaymentProvider = 'paypal' | 'paystack' | 'flutterwave' | 'bank_transfer' | 'custom_link';
+
+export interface PaymentSettings {
+  id?: string;
+  userId?: string;
+  activeProvider: PaymentProvider;
+  // PayPal
+  paypalEmail?: string;
+  paypalClientId?: string;
+  // Paystack
+  paystackPublicKey?: string;
+  paystackSecretKey?: string;
+  // Flutterwave
+  flutterwavePublicKey?: string;
+  // Manual Bank Transfer
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  routingOrSortCode?: string;
+  swiftBic?: string;
+  paymentInstructions?: string;
+  // Custom Payment Link (Stripe, Wise, etc.)
+  customPaymentUrl?: string;
+  isConfigured: boolean;
+  updatedAt?: string;
 }
 
 

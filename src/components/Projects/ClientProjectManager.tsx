@@ -12,9 +12,14 @@ import {
   TrendingUp,
   Layers,
   AlertCircle,
-  X
+  X,
+  Globe,
+  Copy,
+  Check,
+  ExternalLink
 } from 'lucide-react';
 import { useWorkflowStore } from '../../store/useWorkflowStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { CreateClientDTO, CreateProjectDTO, ProjectMilestone } from '../../types';
 import { formatCurrency, formatDate, isOverdue } from '../../utils/formatters';
 
@@ -33,12 +38,16 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
     addProjectMilestone,
     deleteProjectMilestone,
     getProjectMetrics,
-    getTasksByProject
+    getTasksByProject,
+    regenerateClientPortalToken
   } = useWorkflowStore();
+  const { profile } = useAuthStore();
+  const isMember = profile?.role === 'member';
 
   const [activeTab, setActiveTab] = useState<'projects' | 'clients'>('projects');
   const [showClientModal, setShowClientModal] = useState<boolean>(false);
   const [showProjectModal, setShowProjectModal] = useState<boolean>(false);
+  const [copiedClientId, setCopiedClientId] = useState<string | null>(null);
 
   // Quick inline add milestone modal
   const [activeMilestoneProjectId, setActiveMilestoneProjectId] = useState<string | null>(null);
@@ -176,34 +185,36 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
           </button>
         </div>
 
-        {/* Action Button */}
-        <button
-          type="button"
-          onClick={() => {
-            if (activeTab === 'projects') {
-              setNewProject({
-                clientId: clients[0]?.id || '',
-                name: '',
-                description: '',
-                billingType: 'hourly',
-                rate: clients[0]?.hourlyRate || 95,
-                contractTotal: 5000,
-                retainerMonthlyFee: 2500,
-                retainerHoursCap: 25,
-                retainerOvertimeRate: 110,
-                budgetHours: 40,
-                deadline: '',
-              });
-              setShowProjectModal(true);
-            } else {
-              setShowClientModal(true);
-            }
-          }}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-md shadow-sky-500/20 active:scale-95 transition"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{activeTab === 'projects' ? 'New Project' : 'New Client'}</span>
-        </button>
+        {/* Create Action Button (Hidden for Member role) */}
+        {!isMember && (
+          <button
+            type="button"
+            onClick={() => {
+              if (activeTab === 'projects') {
+                setNewProject({
+                  clientId: clients[0]?.id || '',
+                  name: '',
+                  description: '',
+                  billingType: 'hourly',
+                  rate: 95,
+                  contractTotal: 5000,
+                  retainerMonthlyFee: 2500,
+                  retainerHoursCap: 25,
+                  retainerOvertimeRate: 110,
+                  budgetHours: 40,
+                  deadline: '',
+                });
+                setShowProjectModal(true);
+              } else {
+                setShowClientModal(true);
+              }
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-md shadow-sky-500/20 active:scale-95 transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{activeTab === 'projects' ? 'New Project' : 'New Client'}</span>
+          </button>
+        )}
       </div>
 
       {/* --- TAB 1: PROJECTS LIST --- */}
@@ -254,15 +265,17 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
                     {/* 1. HOURLY MODEL */}
                     {proj.billingType === 'hourly' && (
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500 flex items-center gap-1">
-                            <DollarSign className="w-3.5 h-3.5 text-slate-400" />
-                            Rate:
-                          </span>
-                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                            {formatCurrency(proj.rate, client?.currency)}/hr
-                          </span>
-                        </div>
+                        {!isMember && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-500 flex items-center gap-1">
+                              <DollarSign className="w-3.5 h-3.5 text-slate-400" />
+                              Rate:
+                            </span>
+                            <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                              {formatCurrency(proj.rate, client?.currency)}/hr
+                            </span>
+                          </div>
+                        )}
 
                         {proj.budgetHours && (
                           <div>
@@ -285,32 +298,36 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
                       </div>
                     )}
 
-                    {/* 2. FIXED-FEE MODEL: Milestones & Internal Profit Margin */}
+                    {/* 2. FIXED-FEE MODEL: Milestones & Internal Profit Margin (Hidden for Member) */}
                     {proj.billingType === 'fixed_fee' && (
                       <div className="space-y-2.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Contract Total:</span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-white">
-                            {formatCurrency(metrics.contractTotal, client?.currency)}
-                          </span>
-                        </div>
+                        {!isMember && (
+                          <>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Contract Total:</span>
+                              <span className="font-mono font-bold text-slate-900 dark:text-white">
+                                {formatCurrency(metrics.contractTotal, client?.currency)}
+                              </span>
+                            </div>
 
-                        {/* Internal Profit Margin Pill */}
-                        <div className={`p-2 rounded-xl border text-xs flex items-center justify-between ${
-                          metrics.profitMarginPercent >= 30
-                            ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
-                            : metrics.profitMarginPercent >= 0
-                            ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
-                            : 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
-                        }`}>
-                          <span className="flex items-center gap-1 font-semibold text-[11px]">
-                            <TrendingUp className="w-3.5 h-3.5" />
-                            Profit Margin:
-                          </span>
-                          <span className="font-mono font-bold">
-                            {formatCurrency(metrics.profitMarginAmount, client?.currency)} ({metrics.profitMarginPercent}%)
-                          </span>
-                        </div>
+                            {/* Internal Profit Margin Pill */}
+                            <div className={`p-2 rounded-xl border text-xs flex items-center justify-between ${
+                              metrics.profitMarginPercent >= 30
+                                ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                                : metrics.profitMarginPercent >= 0
+                                ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                                : 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                            }`}>
+                              <span className="flex items-center gap-1 font-semibold text-[11px]">
+                                <TrendingUp className="w-3.5 h-3.5" />
+                                Profit Margin:
+                              </span>
+                              <span className="font-mono font-bold">
+                                {formatCurrency(metrics.profitMarginAmount, client?.currency)} ({metrics.profitMarginPercent}%)
+                              </span>
+                            </div>
+                          </>
+                        )}
 
                         {/* Milestones list */}
                         <div className="space-y-1.5 pt-1">
@@ -466,21 +483,23 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
                   })()}
                 </div>
 
-                {/* Card Bottom: Delete Action */}
+                {/* Card Bottom: Delete Action (Hidden for Member) */}
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                   <span>{metrics.totalLoggedHours}h total logged</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Delete project "${proj.name}"?`)) {
-                        deleteProject(proj.id);
-                      }
-                    }}
-                    className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                    title="Delete Project"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {!isMember && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Delete project "${proj.name}"?`)) {
+                          deleteProject(proj.id);
+                        }
+                      }}
+                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                      title="Delete Project"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -504,18 +523,20 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
                     <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                       {client.company || 'Independent'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm(`Delete client "${client.name}" and associated projects?`)) {
-                          deleteClient(client.id);
-                        }
-                      }}
-                      className="p-1 text-slate-400 hover:text-rose-600 transition"
-                      title="Delete Client"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {!isMember && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Delete client "${client.name}" and associated projects?`)) {
+                            deleteClient(client.id);
+                          }
+                        }}
+                        className="p-1 text-slate-400 hover:text-rose-600 transition"
+                        title="Delete Client"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
                   <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-2">
@@ -526,18 +547,84 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
                   </p>
 
                   <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-                    <div>
-                      <span className="text-slate-400 block text-[10px] uppercase">Default Rate</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {client.hourlyRate ? `${formatCurrency(client.hourlyRate, client.currency)}/hr` : 'Custom'}
-                      </span>
-                    </div>
+                    {!isMember ? (
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Default Rate</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          {client.hourlyRate ? `${formatCurrency(client.hourlyRate, client.currency)}/hr` : 'Custom'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Currency</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          {client.currency || 'USD'}
+                        </span>
+                      </div>
+                    )}
 
                     <div>
                       <span className="text-slate-400 block text-[10px] uppercase">Terms</span>
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
                         Net {client.paymentTermsDays} Days
                       </span>
+                    </div>
+                  </div>
+
+                  {/* Client Portal Link Strip */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Globe className="w-3.5 h-3.5 text-sky-500" />
+                        Client Portal Link
+                      </span>
+                      {!isMember && (
+                        <button
+                          type="button"
+                          onClick={() => regenerateClientPortalToken(client.id)}
+                          className="text-[10px] text-slate-400 hover:text-sky-600"
+                          title="Rotate secure token"
+                        >
+                          Rotate Token
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${window.location.origin}/portal/${client.portalToken || 'cp_' + client.id}`}
+                        className="flex-1 px-2.5 py-1 text-[10px] font-mono rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-500 truncate"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${window.location.origin}/portal/${client.portalToken || 'cp_' + client.id}`;
+                          navigator.clipboard.writeText(url);
+                          setCopiedClientId(client.id);
+                          setTimeout(() => setCopiedClientId(null), 2000);
+                        }}
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        title="Copy Portal Link"
+                      >
+                        {copiedClientId === client.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `/portal/${client.portalToken || 'cp_' + client.id}`;
+                          window.open(url, '_blank');
+                        }}
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40"
+                        title="Open Client Portal in New Tab"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
 

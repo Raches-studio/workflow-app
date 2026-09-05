@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { User, Session } from '@supabase/supabase-js';
 import { getSupabaseClient } from '../lib/supabase';
-import { UserProfile, SignInCredentials, SignUpCredentials } from '../types';
+import { UserProfile, UserRole, SignInCredentials, SignUpCredentials } from '../types';
 import { SupabaseService, setActiveAuthUserId } from '../services/supabaseService';
 import { useWorkflowStore } from './useWorkflowStore';
 
@@ -26,6 +26,7 @@ interface AuthState {
   signOut: () => Promise<void>;
   fetchProfile: (userId: string, fallbackUser?: User) => Promise<UserProfile | null>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
+  setRole: (role: UserRole) => void;
   clearError: () => void;
   clearSuccessMessage: () => void;
 }
@@ -304,6 +305,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             fullName,
             businessName,
             email: fallbackUser.email || '',
+            role: (fallbackUser.user_metadata?.role as UserRole) || 'admin',
           };
         }
       }
@@ -319,7 +321,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   /**
-   * Update profile details (Name, Business Name)
+   * Update profile details (Name, Business Name, Role)
    */
   updateProfile: async (updates: Partial<UserProfile>) => {
     const currentProfile = get().profile;
@@ -340,5 +342,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return true;
     }
     return false;
+  },
+
+  /**
+   * Switch or assign role for active user
+   */
+  setRole: (role: UserRole) => {
+    const currentProfile = get().profile;
+    if (currentProfile) {
+      const updated = { ...currentProfile, role };
+      set({ profile: updated });
+      get().updateProfile({ role });
+    } else {
+      const currentUser = get().user;
+      if (currentUser) {
+        const newProf: UserProfile = {
+          id: currentUser.id,
+          fullName: currentUser.user_metadata?.full_name || 'User',
+          email: currentUser.email || '',
+          role,
+        };
+        set({ profile: newProf });
+        get().updateProfile({ role });
+      }
+    }
   },
 }));

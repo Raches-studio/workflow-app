@@ -3,18 +3,19 @@
 -- Run this in your Supabase SQL Editor (Dashboard -> SQL Editor -> New query)
 -- ==========================================================
 
--- 1. Profiles Table (Linked to auth.users)
+-- 1. Profiles Table (Linked to auth.users, supports team roles)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT NOT NULL DEFAULT '',
     business_name TEXT,
     email TEXT NOT NULL DEFAULT '',
+    role VARCHAR(20) DEFAULT 'admin',
     avatar_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Clients Table
+-- 2. Clients Table (Includes secure Portal Token)
 CREATE TABLE IF NOT EXISTS public.clients (
     id TEXT PRIMARY KEY,
     user_id TEXT DEFAULT auth.uid()::text,
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
     currency TEXT DEFAULT 'USD',
     hourly_rate NUMERIC,
     payment_terms_days INTEGER DEFAULT 14,
+    portal_token VARCHAR(64) UNIQUE,
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -68,7 +70,7 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Time Logs Table
+-- 5. Time Logs Table (Includes Timesheet Approval Workflow)
 CREATE TABLE IF NOT EXISTS public.time_logs (
     id TEXT PRIMARY KEY,
     user_id TEXT DEFAULT auth.uid()::text,
@@ -83,6 +85,11 @@ CREATE TABLE IF NOT EXISTS public.time_logs (
     hourly_rate NUMERIC DEFAULT 0,
     is_invoiced BOOLEAN DEFAULT FALSE,
     invoice_id TEXT,
+    approval_status VARCHAR(20) DEFAULT 'draft',
+    submitted_at TIMESTAMPTZ,
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by TEXT,
+    rejection_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -212,5 +219,57 @@ DROP POLICY IF EXISTS "Public access to time_logs" ON public.time_logs;
 DROP POLICY IF EXISTS "Users can manage their own time_logs" ON public.time_logs;
 CREATE POLICY "Users can manage their own time_logs" ON public.time_logs FOR ALL USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 
-DROP POLICY IF EXISTS "Users can manage their own invoices" ON public.invoices;
-CREATE POLICY "Users can manage their own invoices" ON public.invoices FOR ALL USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
+-- 7. Payment Settings Table (Multi-Gateway Configuration)
+CREATE TABLE IF NOT EXISTS public.payment_settings (
+    id TEXT PRIMARY KEY,
+    user_id TEXT DEFAULT auth.uid()::text,
+    active_provider VARCHAR(30) DEFAULT 'paypal',
+    paypal_email TEXT,
+    paypal_client_id TEXT,
+    paystack_public_key TEXT,
+    paystack_secret_key TEXT,
+    flutterwave_public_key TEXT,
+    bank_name TEXT,
+    account_name TEXT,
+    account_number TEXT,
+    routing_or_sort_code TEXT,
+    swift_bic TEXT,
+    payment_instructions TEXT,
+    custom_payment_url TEXT,
+    is_configured BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS on Payment Settings
+ALTER TABLE public.payment_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage their own payment settings" ON public.payment_settings;
+CREATE POLICY "Users can manage their own payment settings"
+    ON public.payment_settings FOR ALL
+    USING (auth.uid()::text = user_id)
+    WITH CHECK (auth.uid()::text = user_id);
+
+-- Public Client Portal RLS Policies (Read-Only access via portal_token)
+DROP POLICY IF EXISTS "Public client portal can read client by token" ON public.clients;
+CREATE POLICY "Public client portal can read client by token"
+    ON public.clients FOR SELECT
+    USING (portal_token IS NOT NULL);
+
+DROP POLICY IF EXISTS "Public client portal can read client projects" ON public.projects;
+CREATE POLICY "Public client portal can read client projects"
+    ON public.projects FOR SELECT
+    USING (client_id IN (SELECT id FROM public.clients WHERE portal_token IS NOT NULL));
+
+DROP POLICY IF EXISTS "Public client portal can read client invoices" ON public.invoices;
+CREATE POLICY "Public client portal can read client invoices"
+    ON public.invoices FOR SELECT
+    USING (client_id IN (SELECT id FROM public.clients WHERE portal_token IS NOT NULL));
+
+DROP POLICY IF EXISTS "Public client portal can read approved time logs" ON public.time_logs;
+CREATE POLICY "Public client portal can read approved time logs"
+    ON public.time_logs FOR SELECT
+    USING (
+        client_id IN (SELECT id FROM public.clients WHERE portal_token IS NOT NULL)
+        AND approval_status = 'approved'
+    );

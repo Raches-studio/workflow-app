@@ -11,13 +11,18 @@ import {
   Search, 
   Receipt,
   X,
-  Layers
+  Layers,
+  CreditCard,
+  Globe,
+  Check
 } from 'lucide-react';
 import { useWorkflowStore } from '../../store/useWorkflowStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { InvoiceStatus, InvoiceLineItem, CreateInvoiceDTO } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { generateInvoicePDF } from '../../utils/pdfGenerator';
+import { PaymentSettingsManager } from '../Payments/PaymentSettingsManager';
+import { generatePaymentUrl } from '../../utils/paymentLinks';
 
 export const InvoiceManager: React.FC = () => {
   const { 
@@ -27,9 +32,14 @@ export const InvoiceManager: React.FC = () => {
     invoices, 
     createInvoice, 
     updateInvoiceStatus, 
-    deleteInvoice 
+    deleteInvoice,
+    paymentSettings
   } = useWorkflowStore();
   const { profile } = useAuthStore();
+  const isMember = profile?.role === 'member';
+
+  const [subTab, setSubTab] = useState<'invoices' | 'gateways'>('invoices');
+  const [copiedPayInvoiceId, setCopiedPayInvoiceId] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | InvoiceStatus>('all');
@@ -87,14 +97,24 @@ export const InvoiceManager: React.FC = () => {
     return projects.filter((p) => p.clientId === selectedClientId);
   }, [projects, selectedClientId]);
 
-  // Client's unbilled time logs
+  // Client's approved unbilled time logs (only approved hours can be invoiced)
   const unbilledLogs = useMemo(() => {
     if (!selectedClientId) return [];
     return timeLogs.filter((l) => {
-      if (l.isInvoiced || !l.isBillable) return false;
+      if (l.isInvoiced || !l.isBillable || l.approvalStatus !== 'approved') return false;
       const proj = projects.find((p) => p.id === l.projectId);
       return proj?.clientId === selectedClientId;
     });
+  }, [timeLogs, projects, selectedClientId]);
+
+  // Client's unapproved logs count for warning
+  const pendingLogsCount = useMemo(() => {
+    if (!selectedClientId) return 0;
+    return timeLogs.filter((l) => {
+      if (l.isInvoiced || !l.isBillable || l.approvalStatus === 'approved') return false;
+      const proj = projects.find((p) => p.id === l.projectId);
+      return proj?.clientId === selectedClientId;
+    }).length;
   }, [timeLogs, projects, selectedClientId]);
 
   // Client's unbilled milestones
@@ -293,33 +313,71 @@ export const InvoiceManager: React.FC = () => {
     });
   }, [invoices, statusFilter, searchQuery]);
 
+  if (isMember) {
+    return (
+      <div className="p-12 text-center rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+          <Receipt className="w-6 h-6" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900 dark:text-white">Invoices & Billing</h3>
+        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+          Invoicing, financial rates, and payment gateway controls are reserved for Admins and Managers. Please submit your tracked hours in the Time Tracker.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6">
-      
-      {/* --- TOP HEADER & ACTIONS --- */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-sky-500" />
-            <span>Invoices & Billing</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Aggregate unbilled time logs, project milestones, and monthly retainers into PDF invoices.
-          </p>
+      {/* Top Sub-Navigation: Invoices vs Payment Gateways & Create Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSubTab('invoices')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              subTab === 'invoices'
+                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Receipt className="w-3.5 h-3.5" />
+            <span>Invoices ({invoices.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('gateways')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              subTab === 'gateways'
+                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <CreditCard className="w-3.5 h-3.5 text-sky-500" />
+            <span>Payment Gateways & Checkout</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-mono uppercase">
+              {paymentSettings.activeProvider}
+            </span>
+          </button>
         </div>
 
         <button
           type="button"
           onClick={() => handleOpenCreateModal()}
-          className="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-md shadow-sky-500/20 active:scale-95 transition"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-md shadow-sky-500/20 active:scale-95 transition"
         >
           <Plus className="w-4 h-4" />
           <span>Create Invoice</span>
         </button>
       </div>
 
-      {/* --- KPI SUMMARY METRIC CARDS --- */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+      {subTab === 'gateways' ? (
+        <PaymentSettingsManager onBackToInvoices={() => setSubTab('invoices')} />
+      ) : (
+        <>
+          {/* --- INVOICE KPI STRIP --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">Total Invoiced</span>
@@ -494,16 +552,60 @@ export const InvoiceManager: React.FC = () => {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* 1-Click PDF Download */}
-                          <button
-                            type="button"
-                            onClick={() => generateInvoicePDF(invoice, profile)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold shadow-sm transition active:scale-95"
-                            title="Download PDF"
-                          >
-                            <Download className="w-3 h-3 text-sky-500" />
-                            <span className="hidden sm:inline">PDF</span>
-                          </button>
+                          {/* 1-Click PDF Download with Payment Button Embedded */}
+                          {(() => {
+                            const client = clients.find((c) => c.id === invoice.clientId);
+                            const portalUrl = client?.portalToken ? `${window.location.origin}/portal/${client.portalToken}` : undefined;
+                            const payUrl = generatePaymentUrl(invoice, paymentSettings, portalUrl);
+
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => generateInvoicePDF(invoice, profile, paymentSettings, portalUrl)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold shadow-sm transition active:scale-95"
+                                  title="Download PDF Invoice with Pay Now link"
+                                >
+                                  <Download className="w-3 h-3 text-sky-500" />
+                                  <span className="hidden sm:inline">PDF</span>
+                                </button>
+
+                                {/* Pay Link Button */}
+                                {payUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(payUrl);
+                                      setCopiedPayInvoiceId(invoice.id);
+                                      setTimeout(() => setCopiedPayInvoiceId(null), 2000);
+                                    }}
+                                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition"
+                                    title="Copy Direct Payment Link"
+                                  >
+                                    {copiedPayInvoiceId === invoice.id ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    ) : (
+                                      <CreditCard className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                )}
+
+                                {/* Portal Link Button */}
+                                {client?.portalToken && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      window.open(`/portal/${client.portalToken}`, '_blank');
+                                    }}
+                                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition"
+                                    title="View in Client Portal"
+                                  >
+                                    <Globe className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
 
                           {/* Delete invoice */}
                           <button
@@ -529,6 +631,8 @@ export const InvoiceManager: React.FC = () => {
         )}
 
       </div>
+      </>
+      )}
 
       {/* --- CREATE INVOICE MODAL --- */}
       {showCreateModal && (
@@ -627,6 +731,22 @@ export const InvoiceManager: React.FC = () => {
 
               {/* Step 2: Unbilled Work Aggregator */}
               <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Step 2: Aggregate Unbilled Work
+                  </h4>
+                </div>
+
+                {/* Notice if unapproved logs exist */}
+                {pendingLogsCount > 0 && (
+                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                    <span>
+                      Notice: <strong>{pendingLogsCount} time log(s)</strong> for this client are still pending approval and cannot be invoiced until approved in the Approvals tab.
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-sky-500" />

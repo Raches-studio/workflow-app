@@ -11,10 +11,14 @@ import {
   Clock, 
   Tag, 
   Trash2,
-  Flower2
+  Flower2,
+  Send,
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 import { useTimerStore } from '../../store/useTimerStore';
 import { useWorkflowStore } from '../../store/useWorkflowStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { formatDuration, formatDurationHuman, formatCurrency } from '../../utils/formatters';
 import { Task } from '../../types';
 
@@ -41,7 +45,16 @@ export function TimeTracker({ onGetUnstuck }: TimeTrackerProps = {}) {
     getElapsedSeconds,
   } = useTimerStore();
 
-  const { projects, clients, tasks, timeLogs, deleteTimeLog } = useWorkflowStore();
+  const { 
+    projects, 
+    clients, 
+    tasks, 
+    timeLogs, 
+    deleteTimeLog, 
+    submitTimesheetForApproval 
+  } = useWorkflowStore();
+  const { profile } = useAuthStore();
+  const isMember = profile?.role === 'member';
 
   // Local state to re-render tick every second when running
   const [seconds, setSeconds] = useState<number>(0);
@@ -175,7 +188,7 @@ export function TimeTracker({ onGetUnstuck }: TimeTrackerProps = {}) {
                   <option value="">Select Project...</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} ({p.billingType === 'hourly' ? `$${p.rate}/hr` : 'Fixed'})
+                      {p.name} ({p.billingType === 'hourly' ? (isMember ? 'Hourly' : `$${p.rate}/hr`) : 'Fixed'})
                     </option>
                   ))}
                 </select>
@@ -241,11 +254,16 @@ export function TimeTracker({ onGetUnstuck }: TimeTrackerProps = {}) {
               {formatDuration(seconds)}
             </div>
 
-            {/* Live Earnings readout */}
+            {/* Live Earnings readout (hidden for Member role) */}
             <div className="h-6 mt-1">
-              {isBillable && selectedProject && seconds > 0 && (
+              {!isMember && isBillable && selectedProject && seconds > 0 && (
                 <span className="text-xs font-mono font-medium text-emerald-600 dark:text-emerald-400">
                   +{formatCurrency(currentSessionEarnings, selectedClient?.currency || 'USD')} accrued
+                </span>
+              )}
+              {isMember && selectedProject && seconds > 0 && (
+                <span className="text-xs font-medium text-slate-400">
+                  Logging time for {selectedProject.name}
                 </span>
               )}
             </div>
@@ -310,16 +328,49 @@ export function TimeTracker({ onGetUnstuck }: TimeTrackerProps = {}) {
         </div>
       </div>
 
+      {/* --- MEMBER TIMESHEET SUBMISSION BANNER --- */}
+      {(() => {
+        const draftLogs = timeLogs.filter((l) => l.approvalStatus === 'draft');
+        const draftHours = Number((draftLogs.reduce((sum, l) => sum + l.durationSeconds, 0) / 3600).toFixed(1));
+        if (draftLogs.length === 0) return null;
+
+        return (
+          <div className="p-4 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold">
+                <Send className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {draftLogs.length} Draft Time Logs ({draftHours}h) Ready for Review
+                </span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  Submit your weekly timesheet to team managers for approval.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => submitTimesheetForApproval(draftLogs.map((l) => l.id))}
+              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-500/20 active:scale-95 transition flex items-center justify-center gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Submit Timesheet for Approval</span>
+            </button>
+          </div>
+        );
+      })()}
+
       {/* --- RECENT TIME LOGS STREAM --- */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Clock className="w-5 h-5 text-indigo-500" />
-              Recent Time Logs
+              Recent Time Logs & Timesheets
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Logged work sessions automatically ready for invoice generation.
+              Tracked sessions, verification status, and submission history.
             </p>
           </div>
           <span className="text-xs font-medium text-slate-500">
@@ -338,6 +389,7 @@ export function TimeTracker({ onGetUnstuck }: TimeTrackerProps = {}) {
               const project = projects.find((p) => p.id === log.projectId);
               const client = clients.find((c) => c.id === log.clientId);
               const task = tasks.find((t) => t.id === log.taskId);
+              const isApproved = log.approvalStatus === 'approved';
 
               return (
                 <div 
@@ -367,26 +419,58 @@ export function TimeTracker({ onGetUnstuck }: TimeTrackerProps = {}) {
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         {log.description}
                       </p>
+
+                      {/* Rejection feedback notice if rejected */}
+                      {log.approvalStatus === 'rejected' && (
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>Correction Needed: {log.rejectionReason}</span>
+                          <button
+                            type="button"
+                            onClick={() => submitTimesheetForApproval([log.id])}
+                            className="ml-2 underline hover:text-rose-700"
+                          >
+                            Re-submit
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 self-end sm:self-center">
-                    {/* Billable & Invoiced Badges */}
+                  <div className="flex items-center gap-3.5 self-end sm:self-center">
+                    
+                    {/* Approval Status Badge */}
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                      log.approvalStatus === 'approved'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                        : log.approvalStatus === 'submitted'
+                        ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 animate-pulse'
+                        : log.approvalStatus === 'rejected'
+                        ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                    }`}>
+                      {log.approvalStatus}
+                    </span>
+
+                    {/* Billable / Financials (Hidden for Member) */}
                     <div className="flex items-center gap-1.5 text-xs">
-                      {log.isBillable ? (
-                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-                          ${((log.durationSeconds / 3600) * log.hourlyRate).toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">Non-billable</span>
+                      {!isMember && (
+                        log.isBillable ? (
+                          <span className="font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                            ${((log.durationSeconds / 3600) * log.hourlyRate).toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">Non-billable</span>
+                        )
                       )}
 
+                      {/* Invoiced Status */}
                       {log.isInvoiced ? (
                         <span className="px-2 py-0.5 rounded-full text-[11px] bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3" /> Invoiced
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                        <span className="px-2 py-0.5 rounded-full text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-500">
                           Unbilled
                         </span>
                       )}
@@ -396,6 +480,18 @@ export function TimeTracker({ onGetUnstuck }: TimeTrackerProps = {}) {
                     <div className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-200">
                       {formatDurationHuman(log.durationSeconds)}
                     </div>
+
+                    {/* Submit Draft Button */}
+                    {log.approvalStatus === 'draft' && (
+                      <button
+                        type="button"
+                        onClick={() => submitTimesheetForApproval([log.id])}
+                        className="px-2 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 text-[11px] font-semibold border border-sky-200 dark:border-sky-800 hover:bg-sky-100"
+                        title="Submit this log for review"
+                      >
+                        Submit
+                      </button>
+                    )}
 
                     {/* Unstuck button */}
                     {onGetUnstuck && (
@@ -409,15 +505,21 @@ export function TimeTracker({ onGetUnstuck }: TimeTrackerProps = {}) {
                       </button>
                     )}
 
-                    {/* Delete button */}
-                    <button
-                      type="button"
-                      onClick={() => deleteTimeLog(log.id)}
-                      className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition"
-                      title="Delete log"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {/* Delete button (Disabled/Locked if approved) */}
+                    {isApproved ? (
+                      <span className="p-1.5 text-slate-300 dark:text-slate-600" title="Approved hours are locked">
+                        <Lock className="w-4 h-4" />
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => deleteTimeLog(log.id)}
+                        className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition"
+                        title="Delete log"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );

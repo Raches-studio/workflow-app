@@ -13,14 +13,17 @@ import {
   ProjectMilestone,
   Invoice,
   InvoiceStatus,
-  CreateInvoiceDTO
+  CreateInvoiceDTO,
+  PaymentSettings,
+  ApprovalStatus
 } from '../types';
 import { 
   INITIAL_CLIENTS, 
   INITIAL_PROJECTS, 
   INITIAL_TASKS, 
   INITIAL_TIMELOGS,
-  INITIAL_INVOICES
+  INITIAL_INVOICES,
+  INITIAL_PAYMENT_SETTINGS
 } from '../mockData/initialData';
 import { SupabaseService, getActiveAuthUserId } from '../services/supabaseService';
 import { getSupabaseConfig, testSupabaseConnection } from '../lib/supabase';
@@ -53,6 +56,7 @@ interface WorkflowState {
   tasks: Task[];
   timeLogs: TimeLog[];
   invoices: Invoice[];
+  paymentSettings: PaymentSettings;
 
   // Supabase cloud status
   supabaseStatus: SupabaseConnectionStatus;
@@ -66,10 +70,14 @@ interface WorkflowState {
   resetUserData: () => void;
   loadSampleData: () => void;
 
+  // Payment Settings
+  updatePaymentSettings: (updates: Partial<PaymentSettings>) => void;
+
   // Client CRUD
   addClient: (dto: CreateClientDTO) => Client;
   updateClient: (id: string, updates: Partial<Client>) => void;
   deleteClient: (id: string) => void;
+  regenerateClientPortalToken: (clientId: string) => string;
 
   // Project CRUD
   addProject: (dto: CreateProjectDTO) => Project;
@@ -83,10 +91,13 @@ interface WorkflowState {
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   deleteTask: (taskId: string) => void;
 
-  // Time Log Operations
+  // Time Log Operations & Approvals
   addTimeLog: (dto: CreateTimeLogDTO) => TimeLog;
   deleteTimeLog: (id: string) => void;
   markTimeLogsInvoiced: (logIds: string[], invoiceId: string) => void;
+  submitTimesheetForApproval: (logIds: string[]) => void;
+  reviewTimeLog: (logId: string, status: ApprovalStatus, reason?: string, reviewerName?: string) => void;
+  reviewBatchTimeLogs: (logIds: string[], status: ApprovalStatus, reason?: string, reviewerName?: string) => void;
 
   // Invoice Operations
   createInvoice: (dto: CreateInvoiceDTO) => Invoice;
@@ -116,6 +127,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       tasks: INITIAL_TASKS,
       timeLogs: INITIAL_TIMELOGS,
       invoices: INITIAL_INVOICES,
+      paymentSettings: INITIAL_PAYMENT_SETTINGS,
 
       // Cloud status
       supabaseStatus: 'idle',
@@ -136,6 +148,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           tasks: [],
           timeLogs: [],
           invoices: [],
+          paymentSettings: INITIAL_PAYMENT_SETTINGS,
           supabaseStatus: 'idle',
           supabaseMessage: undefined,
           isSyncing: false,
@@ -148,11 +161,16 @@ export const useWorkflowStore = create<WorkflowState>()(
       loadSampleData: () => {
         const currentUserId = getActiveAuthUserId() || 'user-default';
         set({
-          clients: INITIAL_CLIENTS.map((c) => ({ ...c, userId: currentUserId })),
+          clients: INITIAL_CLIENTS.map((c) => ({ 
+            ...c, 
+            userId: currentUserId,
+            portalToken: c.portalToken || `cp_${c.id}_demo`
+          })),
           projects: INITIAL_PROJECTS.map((p) => ({ ...p, userId: currentUserId })),
           tasks: INITIAL_TASKS.map((t) => ({ ...t, userId: currentUserId })),
           timeLogs: INITIAL_TIMELOGS.map((l) => ({ ...l, userId: currentUserId })),
           invoices: INITIAL_INVOICES.map((i) => ({ ...i, userId: currentUserId })),
+          paymentSettings: { ...INITIAL_PAYMENT_SETTINGS, userId: currentUserId },
         });
       },
 
@@ -184,7 +202,15 @@ export const useWorkflowStore = create<WorkflowState>()(
         const currentUserId = getActiveAuthUserId();
 
         // Fetch cloud data for active authenticated user
-        const cloudData = await SupabaseService.fetchAllData(currentUserId || undefined);
+        const [cloudData, cloudPaymentSettings] = await Promise.all([
+          SupabaseService.fetchAllData(currentUserId || undefined),
+          SupabaseService.getPaymentSettings(currentUserId || undefined)
+        ]);
+
+        if (cloudPaymentSettings) {
+          set({ paymentSettings: cloudPaymentSettings });
+        }
+
         if (cloudData) {
           const hasCloudRecords = 
             cloudData.clients.length > 0 || 
@@ -200,6 +226,7 @@ export const useWorkflowStore = create<WorkflowState>()(
               tasks: cloudData.tasks,
               timeLogs: cloudData.timeLogs,
               invoices: cloudData.invoices || [],
+              paymentSettings: cloudPaymentSettings || get().paymentSettings,
               supabaseStatus: 'connected',
               supabaseMessage: `Synced ${cloudData.projects.length} projects, ${cloudData.clients.length} clients, and ${cloudData.invoices.length} invoices from Supabase.`,
               isSyncing: false,
@@ -213,6 +240,7 @@ export const useWorkflowStore = create<WorkflowState>()(
               tasks: [],
               timeLogs: [],
               invoices: [],
+              paymentSettings: cloudPaymentSettings || get().paymentSettings,
               supabaseStatus: 'connected',
               supabaseMessage: 'Connected to Supabase cloud. Workspace ready for your clients and projects.',
               isSyncing: false,
@@ -233,7 +261,7 @@ export const useWorkflowStore = create<WorkflowState>()(
        */
       syncLocalDataToCloud: async () => {
         set({ isSyncing: true });
-        const { clients, projects, tasks, timeLogs, invoices } = get();
+        const { clients, projects, tasks, timeLogs, invoices, paymentSettings } = get();
         const currentUserId = getActiveAuthUserId() || undefined;
         const res = await SupabaseService.seedLocalDataToSupabase({
           clients,
@@ -242,6 +270,11 @@ export const useWorkflowStore = create<WorkflowState>()(
           timeLogs,
           invoices,
         }, currentUserId);
+
+        // Also sync payment settings
+        SupabaseService.savePaymentSettings(paymentSettings, currentUserId).catch((err) =>
+          console.warn('[Payment Settings Cloud Sync]', err)
+        );
 
         if (res.success) {
           set({
@@ -259,9 +292,30 @@ export const useWorkflowStore = create<WorkflowState>()(
         return res;
       },
 
+      // --- PAYMENT SETTINGS ---
+      updatePaymentSettings: (updates: Partial<PaymentSettings>) => {
+        set((state) => {
+          const updated = {
+            ...state.paymentSettings,
+            ...updates,
+            isConfigured: true,
+            updatedAt: new Date().toISOString(),
+          };
+          return { paymentSettings: updated };
+        });
+
+        if (get().supabaseStatus === 'connected') {
+          const currentUserId = getActiveAuthUserId() || undefined;
+          SupabaseService.savePaymentSettings(get().paymentSettings, currentUserId).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+      },
+
       // --- CLIENT CRUD ---
       addClient: (dto: CreateClientDTO) => {
         const currentUserId = getActiveAuthUserId() || 'user-default';
+        const generatedToken = 'cp_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
         const newClient: Client = {
           id: `client-${Date.now()}`,
           userId: currentUserId,
@@ -272,6 +326,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           currency: dto.currency || 'USD',
           hourlyRate: dto.hourlyRate,
           paymentTermsDays: dto.paymentTermsDays || 14,
+          portalToken: dto.portalToken || generatedToken,
           notes: dto.notes,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -313,6 +368,22 @@ export const useWorkflowStore = create<WorkflowState>()(
             console.error('[Supabase Sync Error]', err)
           );
         }
+      },
+
+      regenerateClientPortalToken: (clientId: string) => {
+        const newToken = 'cp_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+        set((state) => ({
+          clients: state.clients.map((c) =>
+            c.id === clientId ? { ...c, portalToken: newToken, updatedAt: new Date().toISOString() } : c
+          ),
+        }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.updateClient(clientId, { portalToken: newToken }).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+        return newToken;
       },
 
       // --- PROJECT CRUD ---
@@ -496,6 +567,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           isBillable: dto.isBillable,
           hourlyRate: rate,
           isInvoiced: false,
+          approvalStatus: 'draft',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -534,6 +606,71 @@ export const useWorkflowStore = create<WorkflowState>()(
 
         if (get().supabaseStatus === 'connected') {
           SupabaseService.markTimeLogsInvoiced(logIds, invoiceId).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+      },
+
+      submitTimesheetForApproval: (logIds: string[]) => {
+        const submittedAt = new Date().toISOString();
+        set((state) => ({
+          timeLogs: state.timeLogs.map((l) =>
+            logIds.includes(l.id)
+              ? { ...l, approvalStatus: 'submitted', submittedAt, updatedAt: submittedAt }
+              : l
+          ),
+        }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.updateTimeLogsBatchApproval(logIds, 'submitted').catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+      },
+
+      reviewTimeLog: (logId: string, status: ApprovalStatus, reason?: string, reviewerName?: string) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          timeLogs: state.timeLogs.map((l) =>
+            l.id === logId
+              ? {
+                  ...l,
+                  approvalStatus: status,
+                  reviewedAt: now,
+                  reviewedBy: reviewerName || 'Admin',
+                  rejectionReason: status === 'rejected' ? (reason || 'Needs revision') : undefined,
+                  updatedAt: now,
+                }
+              : l
+          ),
+        }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.updateTimeLogApproval(logId, status, reviewerName, reason).catch((err) =>
+            console.error('[Supabase Sync Error]', err)
+          );
+        }
+      },
+
+      reviewBatchTimeLogs: (logIds: string[], status: ApprovalStatus, reason?: string, reviewerName?: string) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          timeLogs: state.timeLogs.map((l) =>
+            logIds.includes(l.id)
+              ? {
+                  ...l,
+                  approvalStatus: status,
+                  reviewedAt: now,
+                  reviewedBy: reviewerName || 'Admin',
+                  rejectionReason: status === 'rejected' ? (reason || 'Needs revision') : undefined,
+                  updatedAt: now,
+                }
+              : l
+          ),
+        }));
+
+        if (get().supabaseStatus === 'connected') {
+          SupabaseService.updateTimeLogsBatchApproval(logIds, status, reviewerName, reason).catch((err) =>
             console.error('[Supabase Sync Error]', err)
           );
         }
@@ -796,6 +933,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         tasks: state.tasks,
         timeLogs: state.timeLogs,
         invoices: state.invoices,
+        paymentSettings: state.paymentSettings,
       }),
     }
   )

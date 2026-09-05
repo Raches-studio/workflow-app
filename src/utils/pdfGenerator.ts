@@ -1,12 +1,18 @@
 // src/utils/pdfGenerator.ts
 import { jsPDF } from 'jspdf';
-import { Invoice, UserProfile } from '../types';
+import { Invoice, UserProfile, PaymentSettings } from '../types';
 import { formatCurrency } from './formatters';
+import { generatePaymentUrl, formatBankTransferDetails, getProviderLabel } from './paymentLinks';
 
 /**
  * Generates and downloads a clean, professional vector PDF invoice.
  */
-export function generateInvoicePDF(invoice: Invoice, profile?: UserProfile | null): void {
+export function generateInvoicePDF(
+  invoice: Invoice, 
+  profile?: UserProfile | null, 
+  paymentSettings?: PaymentSettings | null,
+  portalUrl?: string
+): void {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -218,18 +224,37 @@ export function generateInvoicePDF(invoice: Invoice, profile?: UserProfile | nul
   const summaryBoxWidth = 75;
   const summaryLeft = pageWidth - margin - summaryBoxWidth;
 
-  // Notes on Left
-  if (invoice.notes) {
+  // Notes and Payment on Left
+  let notesText = invoice.notes || '';
+  if (paymentSettings?.isConfigured && paymentSettings.activeProvider === 'bank_transfer') {
+    const bankDetails = formatBankTransferDetails(paymentSettings, invoice);
+    notesText = notesText ? `${notesText}\n\nBANK TRANSFER DETAILS:\n${bankDetails}` : `BANK TRANSFER DETAILS:\n${bankDetails}`;
+  }
+
+  if (notesText) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(mutedTextColor[0], mutedTextColor[1], mutedTextColor[2]);
     doc.text('PAYMENT TERMS & INSTRUCTIONS', margin, y);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setTextColor(darkTextColor[0], darkTextColor[1], darkTextColor[2]);
-    const splitNotes = doc.splitTextToSize(invoice.notes, contentWidth - summaryBoxWidth - 10);
+    const splitNotes = doc.splitTextToSize(notesText, contentWidth - summaryBoxWidth - 10);
     doc.text(splitNotes, margin, y + 4.5);
+  }
+
+  // Pay Online Button (if online provider configured or portal URL provided)
+  const payUrl = generatePaymentUrl(invoice, paymentSettings, portalUrl);
+  if (payUrl) {
+    const btnY = y + 22;
+    const providerName = paymentSettings?.activeProvider ? getProviderLabel(paymentSettings.activeProvider) : 'Online';
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.roundedRect(margin, btnY, 56, 7.5, 1.5, 1.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.textWithLink(`PAY ONLINE (${providerName.toUpperCase()})`, margin + 4, btnY + 5, { url: payUrl });
   }
 
   // Summary Table on Right

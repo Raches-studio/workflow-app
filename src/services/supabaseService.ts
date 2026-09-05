@@ -1,6 +1,18 @@
-// src/services/supabaseService.ts
 import { getSupabaseClient } from '../lib/supabase';
-import { Client, Project, Task, TimeLog, TaskStatus, UserProfile, Invoice, InvoiceStatus } from '../types';
+import { 
+  Client, 
+  Project, 
+  Task, 
+  TimeLog, 
+  TaskStatus, 
+  UserProfile, 
+  UserRole, 
+  ApprovalStatus, 
+  Invoice, 
+  InvoiceStatus,
+  PaymentSettings,
+  PaymentProvider
+} from '../types';
 
 // ==========================================
 // Database Row Type Definitions
@@ -11,9 +23,31 @@ export interface DBProfile {
   full_name: string;
   business_name: string | null;
   email: string;
+  role: string | null;
   avatar_url: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DBPaymentSettings {
+  id: string;
+  user_id: string;
+  active_provider: string;
+  paypal_email: string | null;
+  paypal_client_id: string | null;
+  paystack_public_key: string | null;
+  paystack_secret_key: string | null;
+  flutterwave_public_key: string | null;
+  bank_name: string | null;
+  account_name: string | null;
+  account_number: string | null;
+  routing_or_sort_code: string | null;
+  swift_bic: string | null;
+  payment_instructions: string | null;
+  custom_payment_url: string | null;
+  is_configured: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface DBClient {
@@ -26,6 +60,7 @@ export interface DBClient {
   currency: string;
   hourly_rate: number | null;
   payment_terms_days: number;
+  portal_token: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -81,6 +116,11 @@ export interface DBTimeLog {
   hourly_rate: number;
   is_invoiced: boolean;
   invoice_id: string | null;
+  approval_status: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  rejection_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -129,6 +169,7 @@ export function mapProfileFromDB(row: DBProfile): UserProfile {
     fullName: row.full_name || '',
     businessName: row.business_name || undefined,
     email: row.email || '',
+    role: (row.role as UserRole) || 'admin',
     avatarUrl: row.avatar_url || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -146,6 +187,7 @@ export function mapClientFromDB(row: DBClient): Client {
     currency: row.currency || 'USD',
     hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : undefined,
     paymentTermsDays: row.payment_terms_days ?? 14,
+    portalToken: row.portal_token || undefined,
     notes: row.notes || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -164,6 +206,7 @@ export function mapClientToDB(client: Client, userIdOverride?: string): DBClient
     currency: client.currency || 'USD',
     hourly_rate: client.hourlyRate != null ? client.hourlyRate : null,
     payment_terms_days: client.paymentTermsDays || 14,
+    portal_token: client.portalToken || null,
     notes: client.notes || null,
     created_at: client.createdAt || new Date().toISOString(),
     updated_at: client.updatedAt || new Date().toISOString(),
@@ -267,6 +310,11 @@ export function mapTimeLogFromDB(row: DBTimeLog): TimeLog {
     hourlyRate: Number(row.hourly_rate) || 0,
     isInvoiced: !!row.is_invoiced,
     invoiceId: row.invoice_id || undefined,
+    approvalStatus: (row.approval_status as ApprovalStatus) || 'draft',
+    submittedAt: row.submitted_at || undefined,
+    reviewedAt: row.reviewed_at || undefined,
+    reviewedBy: row.reviewed_by || undefined,
+    rejectionReason: row.rejection_reason || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -288,6 +336,11 @@ export function mapTimeLogToDB(timeLog: TimeLog, userIdOverride?: string): DBTim
     hourly_rate: timeLog.hourlyRate,
     is_invoiced: timeLog.isInvoiced,
     invoice_id: timeLog.invoiceId || null,
+    approval_status: timeLog.approvalStatus || 'draft',
+    submitted_at: timeLog.submittedAt || null,
+    reviewed_at: timeLog.reviewedAt || null,
+    reviewed_by: timeLog.reviewedBy || null,
+    rejection_reason: timeLog.rejectionReason || null,
     created_at: timeLog.createdAt || new Date().toISOString(),
     updated_at: timeLog.updatedAt || new Date().toISOString(),
   };
@@ -341,6 +394,51 @@ export function mapInvoiceToDB(invoice: Invoice, userIdOverride?: string): DBInv
     items: invoice.items,
     created_at: invoice.createdAt || new Date().toISOString(),
     updated_at: invoice.updatedAt || new Date().toISOString(),
+  };
+}
+
+export function mapPaymentSettingsFromDB(row: DBPaymentSettings): PaymentSettings {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    activeProvider: (row.active_provider as PaymentProvider) || 'paypal',
+    paypalEmail: row.paypal_email || undefined,
+    paypalClientId: row.paypal_client_id || undefined,
+    paystackPublicKey: row.paystack_public_key || undefined,
+    paystackSecretKey: row.paystack_secret_key || undefined,
+    flutterwavePublicKey: row.flutterwave_public_key || undefined,
+    bankName: row.bank_name || undefined,
+    accountName: row.account_name || undefined,
+    accountNumber: row.account_number || undefined,
+    routingOrSortCode: row.routing_or_sort_code || undefined,
+    swiftBic: row.swift_bic || undefined,
+    paymentInstructions: row.payment_instructions || undefined,
+    customPaymentUrl: row.custom_payment_url || undefined,
+    isConfigured: row.is_configured ?? false,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapPaymentSettingsToDB(settings: PaymentSettings, userIdOverride?: string): DBPaymentSettings {
+  const finalUserId = userIdOverride || (settings.userId && settings.userId !== 'user-default' ? settings.userId : (activeAuthUserId || 'user-default'));
+  return {
+    id: settings.id || `ps-${finalUserId}`,
+    user_id: finalUserId,
+    active_provider: settings.activeProvider || 'paypal',
+    paypal_email: settings.paypalEmail || null,
+    paypal_client_id: settings.paypalClientId || null,
+    paystack_public_key: settings.paystackPublicKey || null,
+    paystack_secret_key: settings.paystackSecretKey || null,
+    flutterwave_public_key: settings.flutterwavePublicKey || null,
+    bank_name: settings.bankName || null,
+    account_name: settings.accountName || null,
+    account_number: settings.accountNumber || null,
+    routing_or_sort_code: settings.routingOrSortCode || null,
+    swift_bic: settings.swiftBic || null,
+    payment_instructions: settings.paymentInstructions || null,
+    custom_payment_url: settings.customPaymentUrl || null,
+    is_configured: settings.isConfigured ?? false,
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -431,6 +529,7 @@ export class SupabaseService {
       };
       if (profile.fullName !== undefined) payload.full_name = profile.fullName;
       if (profile.businessName !== undefined) payload.business_name = profile.businessName;
+      if (profile.role !== undefined) payload.role = profile.role;
       if (profile.avatarUrl !== undefined) payload.avatar_url = profile.avatarUrl;
 
       const { data, error } = await client
@@ -766,6 +865,169 @@ export class SupabaseService {
         success: false,
         message: err?.message || 'Error syncing data to Supabase.',
       };
+    }
+  }
+
+  // --- PAYMENT SETTINGS CRUD ---
+  public static async getPaymentSettings(userId?: string): Promise<PaymentSettings | null> {
+    const client = getSupabaseClient();
+    if (!client) return null;
+    const targetUserId = userId || activeAuthUserId;
+    if (!targetUserId) return null;
+
+    try {
+      const { data, error } = await client
+        .from('payment_settings')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[Supabase] Payment settings fetch warning:', error.message);
+        return null;
+      }
+      return data ? mapPaymentSettingsFromDB(data) : null;
+    } catch (err) {
+      console.warn('[Supabase] Network error fetching payment settings:', err);
+      return null;
+    }
+  }
+
+  public static async savePaymentSettings(settings: PaymentSettings, userId?: string): Promise<boolean> {
+    const client = getSupabaseClient();
+    if (!client) return false;
+    const finalUserId = userId || activeAuthUserId;
+
+    try {
+      const dbRow = mapPaymentSettingsToDB(settings, finalUserId || undefined);
+      const { error } = await client.from('payment_settings').upsert(dbRow);
+      if (error) console.error('[Supabase] Error saving payment settings:', error);
+      return !error;
+    } catch (err) {
+      console.error('[Supabase] Error saving payment settings:', err);
+      return false;
+    }
+  }
+
+  // --- TIME LOG APPROVAL SERVICES ---
+  public static async updateTimeLogApproval(
+    logId: string, 
+    status: ApprovalStatus, 
+    reviewedBy?: string, 
+    rejectionReason?: string
+  ): Promise<boolean> {
+    const client = getSupabaseClient();
+    if (!client) return false;
+
+    try {
+      const updates: Record<string, any> = {
+        approval_status: status,
+        updated_at: new Date().toISOString(),
+      };
+      if (status === 'submitted') {
+        updates.submitted_at = new Date().toISOString();
+      } else if (status === 'approved') {
+        updates.reviewed_at = new Date().toISOString();
+        updates.reviewed_by = reviewedBy || 'Admin';
+        updates.rejection_reason = null;
+      } else if (status === 'rejected') {
+        updates.reviewed_at = new Date().toISOString();
+        updates.reviewed_by = reviewedBy || 'Admin';
+        updates.rejection_reason = rejectionReason || 'Requires revision';
+      }
+
+      const { error } = await client.from('time_logs').update(updates).eq('id', logId);
+      if (error) console.error('[Supabase] Error updating log approval:', error);
+      return !error;
+    } catch (err) {
+      console.error('[Supabase] Error updating log approval:', err);
+      return false;
+    }
+  }
+
+  public static async updateTimeLogsBatchApproval(
+    logIds: string[], 
+    status: ApprovalStatus, 
+    reviewedBy?: string, 
+    rejectionReason?: string
+  ): Promise<boolean> {
+    const client = getSupabaseClient();
+    if (!client || logIds.length === 0) return false;
+
+    try {
+      const updates: Record<string, any> = {
+        approval_status: status,
+        updated_at: new Date().toISOString(),
+      };
+      if (status === 'submitted') {
+        updates.submitted_at = new Date().toISOString();
+      } else if (status === 'approved') {
+        updates.reviewed_at = new Date().toISOString();
+        updates.reviewed_by = reviewedBy || 'Admin';
+        updates.rejection_reason = null;
+      } else if (status === 'rejected') {
+        updates.reviewed_at = new Date().toISOString();
+        updates.reviewed_by = reviewedBy || 'Admin';
+        updates.rejection_reason = rejectionReason || 'Requires revision';
+      }
+
+      const { error } = await client.from('time_logs').update(updates).in('id', logIds);
+      if (error) console.error('[Supabase] Error updating batch approval:', error);
+      return !error;
+    } catch (err) {
+      console.error('[Supabase] Error updating batch approval:', err);
+      return false;
+    }
+  }
+
+  // --- CLIENT PORTAL PUBLIC QUERIES ---
+  public static async getPortalData(portalToken: string): Promise<{
+    client: Client;
+    projects: Project[];
+    timeLogs: TimeLog[];
+    invoices: Invoice[];
+    paymentSettings: PaymentSettings | null;
+  } | null> {
+    const client = getSupabaseClient();
+    if (!client) return null;
+
+    try {
+      // 1. Fetch Client by portal token
+      const { data: clientData, error: clientErr } = await client
+        .from('clients')
+        .select('*')
+        .eq('portal_token', portalToken)
+        .maybeSingle();
+
+      if (clientErr || !clientData) {
+        return null;
+      }
+
+      const mappedClient = mapClientFromDB(clientData);
+
+      // 2. Fetch Client's Projects, Approved TimeLogs, Invoices, and PaymentSettings in parallel
+      const [projRes, logsRes, invRes, payRes] = await Promise.all([
+        client.from('projects').select('*').eq('client_id', mappedClient.id),
+        client.from('time_logs').select('*').eq('client_id', mappedClient.id).eq('approval_status', 'approved'),
+        client.from('invoices').select('*').eq('client_id', mappedClient.id),
+        client.from('payment_settings').select('*').eq('user_id', mappedClient.userId).maybeSingle(),
+      ]);
+
+      const projects = (projRes.data || []).map(mapProjectFromDB);
+      const timeLogs = (logsRes.data || []).map(mapTimeLogFromDB);
+      const invoices = (invRes.data || []).map(mapInvoiceFromDB);
+      const paymentSettings = payRes.data ? mapPaymentSettingsFromDB(payRes.data) : null;
+
+      return {
+        client: mappedClient,
+        projects,
+        timeLogs,
+        invoices,
+        paymentSettings,
+      };
+    } catch (err) {
+      console.warn('[Supabase] Error loading portal data:', err);
+      return null;
     }
   }
 }

@@ -4,15 +4,18 @@ import {
   Clock, 
   Briefcase, 
   Receipt,
+  CheckSquare,
   Flower2, 
   Square, 
   Moon, 
-  Sun,
+  Sun, 
   Database
 } from 'lucide-react';
 import { TimeTracker } from './components/TimeTracker/TimeTracker';
 import { ClientProjectManager } from './components/Projects/ClientProjectManager';
 import { InvoiceManager } from './components/Invoices/InvoiceManager';
+import { ApprovalsDashboard } from './components/Approvals/ApprovalsDashboard';
+import { ClientPortalView } from './components/Portal/ClientPortalView';
 import { SupabaseModal } from './components/Supabase/SupabaseModal';
 import { AuthPage } from './components/Auth/AuthPage';
 import { UserProfileMenu } from './components/Header/UserProfileMenu';
@@ -21,26 +24,79 @@ import { useWorkflowStore } from './store/useWorkflowStore';
 import { useAuthStore } from './store/useAuthStore';
 import { formatDuration, formatCurrency } from './utils/formatters';
 import { AIAssistantDrawer } from './components/AIAssistant/AIAssistantDrawer';
-import { CurrentAppContext } from './types';
+import { CurrentAppContext, UserRole } from './types';
+
+/**
+ * Extract client portal token from URL if present:
+ * 1. Path: /portal/:token
+ * 2. Hash: #/portal/:token or #portal=:token
+ * 3. Query: ?portal=:token or ?token=:token
+ */
+function getPortalTokenFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  // 1. Pathname
+  const path = window.location.pathname;
+  const pathMatch = path.match(/\/portal\/([a-zA-Z0-9_-]+)/i);
+  if (pathMatch && pathMatch[1]) return pathMatch[1];
+
+  // 2. Hash
+  const hash = window.location.hash;
+  const hashMatch = hash.match(/#\/?portal(?:\/|=)([a-zA-Z0-9_-]+)/i);
+  if (hashMatch && hashMatch[1]) return hashMatch[1];
+
+  // 3. Query params
+  const searchParams = new URLSearchParams(window.location.search);
+  const portalParam = searchParams.get('portal') || searchParams.get('token');
+  if (portalParam) return portalParam;
+
+  return null;
+}
 
 export function App() {
-  const [activeScreen, setActiveScreen] = useState<'tracker' | 'projects' | 'invoices'>('tracker');
+  const [activeScreen, setActiveScreen] = useState<'tracker' | 'projects' | 'invoices' | 'approvals'>('tracker');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
   const [rachesInitialPrompt, setRachesInitialPrompt] = useState<string | undefined>();
+  const [portalToken, setPortalToken] = useState<string | null>(() => getPortalTokenFromUrl());
 
   const { status, projectId, taskId, getElapsedSeconds, stopTimer } = useTimerStore();
   const { 
     projects, 
     tasks, 
+    timeLogs,
     getUnbilledSummary, 
     supabaseStatus, 
     isSyncing, 
     initSupabaseSync 
   } = useWorkflowStore();
-  const { user, isLoading, initAuth } = useAuthStore();
+  const { user, profile, isLoading, initAuth } = useAuthStore();
   const unbilled = getUnbilledSummary();
+
+  const userRole: UserRole = profile?.role || 'admin';
+  const isMember = userRole === 'member';
+  const canApprove = userRole === 'admin' || userRole === 'manager';
+
+  // Listen to navigation events for portal token
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setPortalToken(getPortalTokenFromUrl());
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
+  // Safe fallback if role switched to member while on restricted screens
+  useEffect(() => {
+    if (isMember && (activeScreen === 'approvals' || activeScreen === 'invoices')) {
+      setActiveScreen('tracker');
+    }
+  }, [isMember, activeScreen]);
 
   const [headerTimerSeconds, setHeaderTimerSeconds] = useState(0);
 
@@ -86,6 +142,10 @@ export function App() {
     isTimerRunning: status === 'running',
   }), [activeScreen, activeProject, activeTask, status]);
 
+  const pendingApprovalsCount = useMemo(() => {
+    return timeLogs.filter((l) => l.approvalStatus === 'submitted').length;
+  }, [timeLogs]);
+
   // Handler for 'Get Unstuck' action buttons on active tasks
   const handleGetUnstuck = (taskTitle: string, taskDesc?: string, projectName?: string) => {
     const projContext = projectName ? ` for project "${projectName}"` : (activeProject ? ` for project "${activeProject.name}"` : '');
@@ -94,6 +154,21 @@ export function App() {
     setRachesInitialPrompt(prompt);
     setIsAiDrawerOpen(true);
   };
+
+  // --- CLIENT PORTAL ACCESS (PUBLIC READ-ONLY ACCESS) ---
+  // If URL contains a portal token, render the ClientPortalView immediately without requiring login
+  if (portalToken) {
+    return (
+      <ClientPortalView 
+        portalToken={portalToken} 
+        onExitPortal={() => {
+          setPortalToken(null);
+          const newUrl = window.location.pathname.replace(/\/portal\/[a-zA-Z0-9_-]+/i, '') || '/';
+          window.history.pushState(null, '', newUrl);
+        }} 
+      />
+    );
+  }
 
   // --- ROUTE PROTECTION: LOADING STATE ---
   if (isLoading) {
@@ -174,17 +249,40 @@ export function App() {
               <span>Projects & Clients</span>
             </button>
 
-            <button
-              onClick={() => setActiveScreen('invoices')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition ${
-                activeScreen === 'invoices'
-                  ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              <Receipt className="w-3.5 h-3.5" />
-              <span>Invoices</span>
-            </button>
+            {/* Invoices: Hidden for members, available to managers & admins */}
+            {!isMember && (
+              <button
+                onClick={() => setActiveScreen('invoices')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition ${
+                  activeScreen === 'invoices'
+                    ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                <span>Invoices</span>
+              </button>
+            )}
+
+            {/* Approvals: Available to Managers & Admins */}
+            {canApprove && (
+              <button
+                onClick={() => setActiveScreen('approvals')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition relative ${
+                  activeScreen === 'approvals'
+                    ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span>Approvals</span>
+                {pendingApprovalsCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white animate-pulse">
+                    {pendingApprovalsCount}
+                  </span>
+                )}
+              </button>
+            )}
           </nav>
 
           {/* Right Action Strip: Cloud, Raches, Active Timer, Unbilled, Theme, User Menu */}
@@ -244,13 +342,15 @@ export function App() {
               </div>
             )}
 
-            {/* Unbilled Quick Counter */}
-            <div className="hidden lg:flex flex-col items-end text-right">
-              <span className="text-[10px] uppercase font-semibold text-slate-400">Unbilled</span>
-              <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
-                {formatCurrency(unbilled.unbilledTotalAmount)}
-              </span>
-            </div>
+            {/* Unbilled Quick Counter (masked for member role) */}
+            {!isMember && (
+              <div className="hidden lg:flex flex-col items-end text-right">
+                <span className="text-[10px] uppercase font-semibold text-slate-400">Unbilled</span>
+                <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
+                  {formatCurrency(unbilled.unbilledTotalAmount)}
+                </span>
+              </div>
+            )}
 
             {/* Theme Toggle */}
             <button
@@ -277,8 +377,11 @@ export function App() {
         {activeScreen === 'projects' && (
           <ClientProjectManager onGetUnstuck={handleGetUnstuck} />
         )}
-        {activeScreen === 'invoices' && (
+        {activeScreen === 'invoices' && !isMember && (
           <InvoiceManager />
+        )}
+        {activeScreen === 'approvals' && canApprove && (
+          <ApprovalsDashboard />
         )}
       </main>
 

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useWorkflowStore } from '../../store/useWorkflowStore';
+import { UserRole } from '../../types';
 
 interface UserProfileMenuProps {
   onOpenSupabaseModal?: () => void;
@@ -20,8 +21,10 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ onOpenSupabase
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const { user, profile, signOut } = useAuthStore();
+  const { user, profile, signOut, setRole } = useAuthStore();
   const { supabaseStatus } = useWorkflowStore();
+
+  const activeRole: UserRole = profile?.role || 'admin';
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -93,11 +96,22 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ onOpenSupabase
           <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
         </div>
 
-        {/* User Name (hidden on small mobile) */}
+        {/* User Name & Role (hidden on small mobile) */}
         <div className="hidden sm:flex flex-col text-left">
-          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tracking-tight leading-tight truncate max-w-[120px]">
-            {displayName}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tracking-tight leading-tight truncate max-w-[100px]">
+              {displayName}
+            </span>
+            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded ${
+              activeRole === 'admin'
+                ? 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300'
+                : activeRole === 'manager'
+                ? 'bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300'
+                : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+            }`}>
+              {activeRole}
+            </span>
+          </div>
           {displayBusiness && (
             <span className="text-[10px] text-slate-400 leading-none truncate max-w-[120px]">
               {displayBusiness}
@@ -123,8 +137,11 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ onOpenSupabase
                 {initials}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                  {displayName}
+                <div className="text-sm font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                  <span>{displayName}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    {activeRole}
+                  </span>
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
                   <Mail className="w-3 h-3 text-slate-400 shrink-0" />
@@ -140,6 +157,31 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ onOpenSupabase
                 <span className="truncate">{displayBusiness}</span>
               </div>
             )}
+          </div>
+
+          {/* Interactive Role Switcher */}
+          <div className="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800/80">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between">
+              <span>Active Role & Permissions</span>
+              <span className="text-sky-600 dark:text-sky-400 font-mono capitalize">{activeRole}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1 bg-slate-200/60 dark:bg-slate-800/80 p-1 rounded-xl text-center">
+              {(['admin', 'manager', 'member'] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRole(r)}
+                  className={`py-1 text-[11px] font-bold rounded-lg capitalize transition ${
+                    activeRole === r
+                      ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title={`Switch to ${r} role`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Account & Security Status */}
