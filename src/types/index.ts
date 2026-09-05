@@ -21,6 +21,17 @@ export interface Client {
   updatedAt: string;
 }
 
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  amount: number;
+  percentage?: number;
+  dueDate?: string;
+  status: 'pending' | 'invoiced' | 'paid';
+  invoiceId?: string;
+  createdAt?: string;
+}
+
 export interface Project {
   id: string;
   userId: string;
@@ -28,7 +39,15 @@ export interface Project {
   name: string;
   description?: string;
   billingType: BillingType;
-  rate: number; // hourly rate or fixed project fee
+  rate: number; // hourly rate fallback
+  // Fixed-fee fields
+  contractTotal?: number;
+  milestones?: ProjectMilestone[];
+  // Retainer fields
+  retainerMonthlyFee?: number;
+  retainerHoursCap?: number;
+  retainerOvertimeRate?: number;
+  // General budget & deadlines
   budgetHours?: number;
   budgetAmount?: number;
   deadline?: string; // ISO string YYYY-MM-DD
@@ -100,6 +119,11 @@ export interface CreateProjectDTO {
   description?: string;
   billingType: BillingType;
   rate: number;
+  contractTotal?: number;
+  milestones?: ProjectMilestone[];
+  retainerMonthlyFee?: number;
+  retainerHoursCap?: number;
+  retainerOvertimeRate?: number;
   budgetHours?: number;
   budgetAmount?: number;
   deadline?: string;
@@ -115,6 +139,63 @@ export interface CreateTimeLogDTO {
   durationSeconds: number;
   isBillable: boolean;
   hourlyRate?: number;
+}
+
+// ==========================================
+// Invoicing Engine Types
+// ==========================================
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue';
+
+export interface InvoiceLineItem {
+  id: string;
+  type: 'hourly_log' | 'milestone' | 'retainer' | 'custom';
+  description: string;
+  quantity: number; // e.g. hours or 1
+  unitPrice: number; // rate or fee
+  amount: number; // quantity * unitPrice
+  timeLogId?: string;
+  milestoneId?: string;
+  projectId?: string;
+}
+
+export interface Invoice {
+  id: string;
+  userId: string;
+  clientId: string;
+  clientName: string;
+  clientEmail?: string;
+  clientCompany?: string;
+  invoiceNumber: string; // e.g. "INV-1001"
+  issueDate: string; // YYYY-MM-DD
+  dueDate: string; // YYYY-MM-DD
+  status: InvoiceStatus;
+  items: InvoiceLineItem[];
+  subtotal: number;
+  taxRate: number; // e.g. 10 (%)
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  paymentTermsDays: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateInvoiceDTO {
+  clientId: string;
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate: string;
+  items: InvoiceLineItem[];
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency?: string;
+  paymentTermsDays?: number;
+  notes?: string;
+  status?: InvoiceStatus;
 }
 
 // AI Work Assistant Types
@@ -165,7 +246,7 @@ export interface AIMessage {
 }
 
 export interface CurrentAppContext {
-  currentPage: 'tracker' | 'projects';
+  currentPage: 'tracker' | 'projects' | 'invoices';
   activeProjectId?: string;
   activeProjectName?: string;
   activeTaskId?: string;
@@ -173,5 +254,32 @@ export interface CurrentAppContext {
   activeTaskDescription?: string;
   isTimerRunning?: boolean;
 }
+
+// ==========================================
+// Authentication & User Profile Types
+// ==========================================
+
+export interface UserProfile {
+  id: string; // matches auth.users.id
+  fullName: string;
+  businessName?: string;
+  email: string;
+  avatarUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SignInCredentials {
+  email: string;
+  password: string;
+}
+
+export interface SignUpCredentials {
+  fullName: string;
+  email: string;
+  password: string;
+  businessName?: string;
+}
+
 
 

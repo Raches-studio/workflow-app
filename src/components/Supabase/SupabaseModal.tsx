@@ -28,13 +28,25 @@ interface SupabaseModalProps {
   onClose: () => void;
 }
 
-const SUPABASE_SCHEMA_SQL = `-- WorkerHub: Supabase Database Setup Script
--- Run this in your Supabase SQL Editor (Dashboard -> SQL Editor -> New query -> Run)
+const SUPABASE_SCHEMA_SQL = `-- WorkerHub: Phase 1 Database Schema (Profiles & Strict Row Level Security)
+-- Run this in your Supabase SQL Editor:
+-- Dashboard -> SQL Editor -> New Query -> Paste & Run
 
--- 1. Clients Table
+-- 1. Profiles Table (Linked to auth.users)
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    full_name TEXT NOT NULL DEFAULT '',
+    business_name TEXT,
+    email TEXT NOT NULL DEFAULT '',
+    avatar_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Clients Table
 CREATE TABLE IF NOT EXISTS public.clients (
     id TEXT PRIMARY KEY,
-    user_id TEXT DEFAULT 'user-default',
+    user_id TEXT DEFAULT auth.uid()::text,
     name TEXT NOT NULL,
     email TEXT,
     phone TEXT,
@@ -47,10 +59,10 @@ CREATE TABLE IF NOT EXISTS public.clients (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Projects Table
+-- 3. Projects Table
 CREATE TABLE IF NOT EXISTS public.projects (
     id TEXT PRIMARY KEY,
-    user_id TEXT DEFAULT 'user-default',
+    user_id TEXT DEFAULT auth.uid()::text,
     client_id TEXT NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
@@ -64,10 +76,10 @@ CREATE TABLE IF NOT EXISTS public.projects (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Tasks Table
+-- 4. Tasks Table
 CREATE TABLE IF NOT EXISTS public.tasks (
     id TEXT PRIMARY KEY,
-    user_id TEXT DEFAULT 'user-default',
+    user_id TEXT DEFAULT auth.uid()::text,
     project_id TEXT NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT,
@@ -80,10 +92,10 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Time Logs Table
+-- 5. Time Logs Table
 CREATE TABLE IF NOT EXISTS public.time_logs (
     id TEXT PRIMARY KEY,
-    user_id TEXT DEFAULT 'user-default',
+    user_id TEXT DEFAULT auth.uid()::text,
     client_id TEXT,
     project_id TEXT NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
     task_id TEXT REFERENCES public.tasks(id) ON DELETE SET NULL,
@@ -99,13 +111,17 @@ CREATE TABLE IF NOT EXISTS public.time_logs (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes
+-- Indexes for optimal performance
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
+CREATE INDEX IF NOT EXISTS idx_clients_user_id ON public.clients(user_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON public.projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_projects_client_id ON public.projects(client_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON public.tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON public.tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_time_logs_user_id ON public.time_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_time_logs_project_id ON public.time_logs(project_id);
-CREATE INDEX IF NOT EXISTS idx_time_logs_client_id ON public.time_logs(client_id);
 
--- Updated_at trigger
+-- Updated_at Trigger Function
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -113,6 +129,9 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;
+CREATE TRIGGER set_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 DROP TRIGGER IF EXISTS set_clients_updated_at ON public.clients;
 CREATE TRIGGER set_clients_updated_at BEFORE UPDATE ON public.clients FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -126,24 +145,63 @@ CREATE TRIGGER set_tasks_updated_at BEFORE UPDATE ON public.tasks FOR EACH ROW E
 DROP TRIGGER IF EXISTS set_time_logs_updated_at ON public.time_logs;
 CREATE TRIGGER set_time_logs_updated_at BEFORE UPDATE ON public.time_logs FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- Enable Row Level Security (RLS)
+-- Auto Profile Trigger on auth.users Sign Up
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, full_name, business_name, email)
+    VALUES (
+        NEW.id,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', ''),
+        COALESCE(NEW.raw_user_meta_data->>'business_name', ''),
+        COALESCE(NEW.email, '')
+    )
+    ON CONFLICT (id) DO UPDATE
+    SET
+        full_name = EXCLUDED.full_name,
+        business_name = EXCLUDED.business_name,
+        email = EXCLUDED.email,
+        updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Enable Row Level Security (RLS) on all tables
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.time_logs ENABLE ROW LEVEL SECURITY;
 
--- Public development access policies
+-- Profiles RLS Policies
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
+CREATE POLICY "Users can view their own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+-- Core Data Isolation Policies (auth.uid() = user_id)
 DROP POLICY IF EXISTS "Public access to clients" ON public.clients;
-CREATE POLICY "Public access to clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Users can manage their own clients" ON public.clients;
+CREATE POLICY "Users can manage their own clients" ON public.clients FOR ALL USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 
 DROP POLICY IF EXISTS "Public access to projects" ON public.projects;
-CREATE POLICY "Public access to projects" ON public.projects FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Users can manage their own projects" ON public.projects;
+CREATE POLICY "Users can manage their own projects" ON public.projects FOR ALL USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 
 DROP POLICY IF EXISTS "Public access to tasks" ON public.tasks;
-CREATE POLICY "Public access to tasks" ON public.tasks FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Users can manage their own tasks" ON public.tasks;
+CREATE POLICY "Users can manage their own tasks" ON public.tasks FOR ALL USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 
 DROP POLICY IF EXISTS "Public access to time_logs" ON public.time_logs;
-CREATE POLICY "Public access to time_logs" ON public.time_logs FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Users can manage their own time_logs" ON public.time_logs;
+CREATE POLICY "Users can manage their own time_logs" ON public.time_logs FOR ALL USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 `;
 
 export function SupabaseModal({ isOpen, onClose }: SupabaseModalProps) {

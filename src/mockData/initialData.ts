@@ -1,5 +1,5 @@
 // src/mockData/initialData.ts
-import { Client, Project, Task, TimeLog } from '../types';
+import { Client, Project, Task, TimeLog, Invoice } from '../types';
 
 export const INITIAL_CLIENTS: Client[] = [
   {
@@ -68,7 +68,35 @@ export const INITIAL_PROJECTS: Project[] = [
     name: 'Mobile Crypto Wallet MVP',
     description: 'React Native cross-platform MVP with biometric auth & chart widgets.',
     billingType: 'fixed_fee',
-    rate: 8500, // Fixed lump sum
+    rate: 95, // standard team hourly cost for profit margin calculation
+    contractTotal: 8500,
+    milestones: [
+      {
+        id: 'ms-1',
+        title: '50% Project Kickoff Deposit',
+        amount: 4250,
+        percentage: 50,
+        dueDate: new Date(Date.now() - 10 * 86400000).toISOString().split('T')[0],
+        status: 'paid',
+        invoiceId: 'inv-1',
+      },
+      {
+        id: 'ms-2',
+        title: 'Beta Release & Biometric Flow',
+        amount: 2550,
+        percentage: 30,
+        dueDate: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
+        status: 'pending',
+      },
+      {
+        id: 'ms-3',
+        title: 'Final Delivery & App Store Launch',
+        amount: 1700,
+        percentage: 20,
+        dueDate: new Date(Date.now() + 25 * 86400000).toISOString().split('T')[0],
+        status: 'pending',
+      },
+    ],
     budgetHours: 80,
     deadline: new Date(Date.now() + 25 * 86400000).toISOString().split('T')[0],
     status: 'active',
@@ -80,12 +108,14 @@ export const INITIAL_PROJECTS: Project[] = [
     userId: 'user-default',
     clientId: 'client-3',
     name: 'E-commerce Checkout Migration',
-    description: 'Migrating legacy checkout to headless Shopify with 1-click buy.',
-    billingType: 'hourly',
+    description: 'Ongoing headless Shopify Plus maintenance and 1-click checkout optimization.',
+    billingType: 'retainer',
     rate: 85,
-    budgetHours: 35,
-    budgetAmount: 2975,
-    deadline: new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0], // slightly past due
+    retainerMonthlyFee: 2500,
+    retainerHoursCap: 25,
+    retainerOvertimeRate: 110,
+    budgetHours: 25,
+    deadline: new Date(Date.now() + 20 * 86400000).toISOString().split('T')[0],
     status: 'active',
     createdAt: new Date(Date.now() - 12 * 86400000).toISOString(),
     updatedAt: new Date().toISOString(),
@@ -187,3 +217,72 @@ export const INITIAL_TIMELOGS: TimeLog[] = [
     updatedAt: new Date().toISOString(),
   },
 ];
+
+export const INITIAL_INVOICES: Invoice[] = [
+  {
+    id: 'inv-1',
+    userId: 'user-default',
+    clientId: 'client-2',
+    clientName: 'David Sterling',
+    clientCompany: 'FinTech Labs Inc.',
+    clientEmail: 'david@fintechlabs.io',
+    invoiceNumber: 'INV-2026-001',
+    issueDate: new Date(Date.now() - 10 * 86400000).toISOString().split('T')[0],
+    dueDate: new Date(Date.now() + 4 * 86400000).toISOString().split('T')[0],
+    status: 'paid',
+    items: [
+      {
+        id: 'item-1',
+        type: 'milestone',
+        description: 'Mobile Crypto Wallet MVP - 50% Project Kickoff Deposit',
+        quantity: 1,
+        unitPrice: 4250,
+        amount: 4250,
+        milestoneId: 'ms-1',
+        projectId: 'proj-2',
+      },
+    ],
+    subtotal: 4250,
+    taxRate: 0,
+    taxAmount: 0,
+    totalAmount: 4250,
+    currency: 'USD',
+    paymentTermsDays: 14,
+    notes: 'Direct wire transfer received. Thank you for your partnership!',
+    createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv-2',
+    userId: 'user-default',
+    clientId: 'client-1',
+    clientName: 'Sarah Jenkins',
+    clientCompany: 'Acme Design Studio',
+    clientEmail: 'sarah@acmestudio.design',
+    invoiceNumber: 'INV-2026-002',
+    issueDate: new Date(Date.now() - 5 * 86400000).toISOString().split('T')[0],
+    dueDate: new Date(Date.now() + 9 * 86400000).toISOString().split('T')[0],
+    status: 'sent',
+    items: [
+      {
+        id: 'item-2',
+        type: 'hourly_log',
+        description: 'Brand portal design tokens & component architecture',
+        quantity: 12,
+        unitPrice: 95,
+        amount: 1140,
+        projectId: 'proj-1',
+      },
+    ],
+    subtotal: 1140,
+    taxRate: 10,
+    taxAmount: 114,
+    totalAmount: 1254,
+    currency: 'USD',
+    paymentTermsDays: 14,
+    notes: 'Please remit payment via Stripe or direct bank transfer within 14 days.',
+    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+

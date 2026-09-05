@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Clock, 
   Briefcase, 
+  Receipt,
   Flower2, 
   Square, 
   Moon, 
@@ -11,15 +12,19 @@ import {
 } from 'lucide-react';
 import { TimeTracker } from './components/TimeTracker/TimeTracker';
 import { ClientProjectManager } from './components/Projects/ClientProjectManager';
+import { InvoiceManager } from './components/Invoices/InvoiceManager';
 import { SupabaseModal } from './components/Supabase/SupabaseModal';
+import { AuthPage } from './components/Auth/AuthPage';
+import { UserProfileMenu } from './components/Header/UserProfileMenu';
 import { useTimerStore } from './store/useTimerStore';
 import { useWorkflowStore } from './store/useWorkflowStore';
+import { useAuthStore } from './store/useAuthStore';
 import { formatDuration, formatCurrency } from './utils/formatters';
 import { AIAssistantDrawer } from './components/AIAssistant/AIAssistantDrawer';
 import { CurrentAppContext } from './types';
 
 export function App() {
-  const [activeScreen, setActiveScreen] = useState<'tracker' | 'projects'>('tracker');
+  const [activeScreen, setActiveScreen] = useState<'tracker' | 'projects' | 'invoices'>('tracker');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
@@ -34,14 +39,22 @@ export function App() {
     isSyncing, 
     initSupabaseSync 
   } = useWorkflowStore();
+  const { user, isLoading, initAuth } = useAuthStore();
   const unbilled = getUnbilledSummary();
 
   const [headerTimerSeconds, setHeaderTimerSeconds] = useState(0);
 
-  // Initialize Supabase sync on app mount
+  // 1. Initialize Supabase Auth on app mount
   useEffect(() => {
-    initSupabaseSync();
-  }, [initSupabaseSync]);
+    initAuth();
+  }, [initAuth]);
+
+  // 2. Initialize Supabase sync when authenticated
+  useEffect(() => {
+    if (user) {
+      initSupabaseSync();
+    }
+  }, [user, initSupabaseSync]);
 
   // Keep top-bar persistent timer in sync
   useEffect(() => {
@@ -82,10 +95,41 @@ export function App() {
     setIsAiDrawerOpen(true);
   };
 
+  // --- ROUTE PROTECTION: LOADING STATE ---
+  if (isLoading) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors`}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 via-indigo-600 to-violet-600 flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-sky-500/25 animate-pulse">
+            W
+          </div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <div className="w-3.5 h-3.5 border-2 border-sky-500/30 border-t-sky-500 rounded-full animate-spin" />
+            <span>Verifying authentication...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- ROUTE PROTECTION: UNAUTHENTICATED USERS REDIRECTED TO LOGIN ---
+  if (!user) {
+    return (
+      <div className={isDarkMode ? 'dark' : ''}>
+        <AuthPage onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)} />
+        <SupabaseModal 
+          isOpen={isSupabaseModalOpen} 
+          onClose={() => setIsSupabaseModalOpen(false)} 
+        />
+      </div>
+    );
+  }
+
+  // --- AUTHENTICATED APPLICATION SHELL ---
   return (
     <div className={`min-h-screen ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors`}>
       {/* --- GLOBAL APPLICATION HEADER --- */}
-      <header className="sticky top-0 z-40 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 py-3.5">
+      <header className="sticky top-0 z-40 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           
           {/* Logo & Slogan */}
@@ -129,10 +173,22 @@ export function App() {
               <Briefcase className="w-3.5 h-3.5" />
               <span>Projects & Clients</span>
             </button>
+
+            <button
+              onClick={() => setActiveScreen('invoices')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition ${
+                activeScreen === 'invoices'
+                  ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <Receipt className="w-3.5 h-3.5" />
+              <span>Invoices</span>
+            </button>
           </nav>
 
-          {/* Persistent Active Timer, Supabase Cloud & Raches Trigger Strip */}
-          <div className="flex items-center gap-2.5">
+          {/* Right Action Strip: Cloud, Raches, Active Timer, Unbilled, Theme, User Menu */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
             {/* Supabase Cloud Connection Status Button */}
             <button
               onClick={() => setIsSupabaseModalOpen(true)}
@@ -146,7 +202,7 @@ export function App() {
               title="Configure Supabase Cloud Database"
             >
               <Database className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span className="hidden sm:inline">
+              <span className="hidden md:inline">
                 {supabaseStatus === 'connected' 
                   ? 'Cloud Synced' 
                   : supabaseStatus === 'checking' || isSyncing 
@@ -158,7 +214,7 @@ export function App() {
               )}
             </button>
 
-            {/* Rebranded Raches (Rachel) Trigger Button (Sky blue, White & Floral) */}
+            {/* Rachel AI Trigger Button */}
             <button
               onClick={() => {
                 setRachesInitialPrompt(undefined);
@@ -171,6 +227,7 @@ export function App() {
               <span className="font-bold tracking-tight">Raches 🌸</span>
             </button>
 
+            {/* Active Timer Pill */}
             {status === 'running' && (
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -188,7 +245,7 @@ export function App() {
             )}
 
             {/* Unbilled Quick Counter */}
-            <div className="hidden md:flex flex-col items-end text-right">
+            <div className="hidden lg:flex flex-col items-end text-right">
               <span className="text-[10px] uppercase font-semibold text-slate-400">Unbilled</span>
               <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
                 {formatCurrency(unbilled.unbilledTotalAmount)}
@@ -198,11 +255,15 @@ export function App() {
             {/* Theme Toggle */}
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               title="Toggle Dark/Light Mode"
             >
               {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
             </button>
+
+            {/* User Profile Dropdown Menu */}
+            <UserProfileMenu onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)} />
+
           </div>
 
         </div>
@@ -215,6 +276,9 @@ export function App() {
         )}
         {activeScreen === 'projects' && (
           <ClientProjectManager onGetUnstuck={handleGetUnstuck} />
+        )}
+        {activeScreen === 'invoices' && (
+          <InvoiceManager />
         )}
       </main>
 

@@ -1,10 +1,20 @@
 // src/services/supabaseService.ts
 import { getSupabaseClient } from '../lib/supabase';
-import { Client, Project, Task, TimeLog, TaskStatus } from '../types';
+import { Client, Project, Task, TimeLog, TaskStatus, UserProfile, Invoice, InvoiceStatus } from '../types';
 
 // ==========================================
 // Database Row Type Definitions
 // ==========================================
+
+export interface DBProfile {
+  id: string;
+  full_name: string;
+  business_name: string | null;
+  email: string;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface DBClient {
   id: string;
@@ -29,6 +39,11 @@ export interface DBProject {
   description: string | null;
   billing_type: string;
   rate: number;
+  contract_total: number | null;
+  milestones: any;
+  retainer_monthly_fee: number | null;
+  retainer_hours_cap: number | null;
+  retainer_overtime_rate: number | null;
   budget_hours: number | null;
   budget_amount: number | null;
   deadline: string | null;
@@ -70,9 +85,55 @@ export interface DBTimeLog {
   updated_at: string;
 }
 
+export interface DBInvoice {
+  id: string;
+  user_id: string;
+  client_id: string;
+  client_name: string;
+  client_email: string | null;
+  client_company: string | null;
+  invoice_number: string;
+  issue_date: string;
+  due_date: string;
+  status: string;
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  total_amount: number;
+  currency: string;
+  payment_terms_days: number;
+  notes: string | null;
+  items: any;
+  created_at: string;
+  updated_at: string;
+}
+
+// Active user session cache to guarantee RLS conformance
+let activeAuthUserId: string | null = null;
+
+export function setActiveAuthUserId(id: string | null): void {
+  activeAuthUserId = id;
+}
+
+export function getActiveAuthUserId(): string | null {
+  return activeAuthUserId;
+}
+
 // ==========================================
 // Type Mappers (camelCase <-> snake_case)
 // ==========================================
+
+export function mapProfileFromDB(row: DBProfile): UserProfile {
+  return {
+    id: row.id,
+    fullName: row.full_name || '',
+    businessName: row.business_name || undefined,
+    email: row.email || '',
+    avatarUrl: row.avatar_url || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 export function mapClientFromDB(row: DBClient): Client {
   return {
@@ -91,10 +152,11 @@ export function mapClientFromDB(row: DBClient): Client {
   };
 }
 
-export function mapClientToDB(client: Client): DBClient {
+export function mapClientToDB(client: Client, userIdOverride?: string): DBClient {
+  const finalUserId = userIdOverride || (client.userId && client.userId !== 'user-default' ? client.userId : (activeAuthUserId || 'user-default'));
   return {
     id: client.id,
-    user_id: client.userId || 'user-default',
+    user_id: finalUserId,
     name: client.name,
     email: client.email || null,
     phone: client.phone || null,
@@ -117,6 +179,11 @@ export function mapProjectFromDB(row: DBProject): Project {
     description: row.description || undefined,
     billingType: (row.billing_type as any) || 'hourly',
     rate: Number(row.rate) || 0,
+    contractTotal: row.contract_total != null ? Number(row.contract_total) : undefined,
+    milestones: Array.isArray(row.milestones) ? row.milestones : [],
+    retainerMonthlyFee: row.retainer_monthly_fee != null ? Number(row.retainer_monthly_fee) : undefined,
+    retainerHoursCap: row.retainer_hours_cap != null ? Number(row.retainer_hours_cap) : undefined,
+    retainerOvertimeRate: row.retainer_overtime_rate != null ? Number(row.retainer_overtime_rate) : undefined,
     budgetHours: row.budget_hours != null ? Number(row.budget_hours) : undefined,
     budgetAmount: row.budget_amount != null ? Number(row.budget_amount) : undefined,
     deadline: row.deadline || undefined,
@@ -126,15 +193,21 @@ export function mapProjectFromDB(row: DBProject): Project {
   };
 }
 
-export function mapProjectToDB(project: Project): DBProject {
+export function mapProjectToDB(project: Project, userIdOverride?: string): DBProject {
+  const finalUserId = userIdOverride || (project.userId && project.userId !== 'user-default' ? project.userId : (activeAuthUserId || 'user-default'));
   return {
     id: project.id,
-    user_id: project.userId || 'user-default',
+    user_id: finalUserId,
     client_id: project.clientId,
     name: project.name,
     description: project.description || null,
     billing_type: project.billingType,
     rate: project.rate,
+    contract_total: project.contractTotal != null ? project.contractTotal : null,
+    milestones: project.milestones || [],
+    retainer_monthly_fee: project.retainerMonthlyFee != null ? project.retainerMonthlyFee : null,
+    retainer_hours_cap: project.retainerHoursCap != null ? project.retainerHoursCap : null,
+    retainer_overtime_rate: project.retainerOvertimeRate != null ? project.retainerOvertimeRate : null,
     budget_hours: project.budgetHours != null ? project.budgetHours : null,
     budget_amount: project.budgetAmount != null ? project.budgetAmount : null,
     deadline: project.deadline || null,
@@ -161,10 +234,11 @@ export function mapTaskFromDB(row: DBTask): Task {
   };
 }
 
-export function mapTaskToDB(task: Task): DBTask {
+export function mapTaskToDB(task: Task, userIdOverride?: string): DBTask {
+  const finalUserId = userIdOverride || (task.userId && task.userId !== 'user-default' ? task.userId : (activeAuthUserId || 'user-default'));
   return {
     id: task.id,
-    user_id: task.userId || 'user-default',
+    user_id: finalUserId,
     project_id: task.projectId,
     title: task.title,
     description: task.description || null,
@@ -198,10 +272,11 @@ export function mapTimeLogFromDB(row: DBTimeLog): TimeLog {
   };
 }
 
-export function mapTimeLogToDB(timeLog: TimeLog): DBTimeLog {
+export function mapTimeLogToDB(timeLog: TimeLog, userIdOverride?: string): DBTimeLog {
+  const finalUserId = userIdOverride || (timeLog.userId && timeLog.userId !== 'user-default' ? timeLog.userId : (activeAuthUserId || 'user-default'));
   return {
     id: timeLog.id,
-    user_id: timeLog.userId || 'user-default',
+    user_id: finalUserId,
     client_id: timeLog.clientId,
     project_id: timeLog.projectId,
     task_id: timeLog.taskId || null,
@@ -218,29 +293,82 @@ export function mapTimeLogToDB(timeLog: TimeLog): DBTimeLog {
   };
 }
 
+export function mapInvoiceFromDB(row: DBInvoice): Invoice {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    clientId: row.client_id,
+    clientName: row.client_name,
+    clientEmail: row.client_email || undefined,
+    clientCompany: row.client_company || undefined,
+    invoiceNumber: row.invoice_number,
+    issueDate: row.issue_date,
+    dueDate: row.due_date,
+    status: (row.status as InvoiceStatus) || 'draft',
+    subtotal: Number(row.subtotal) || 0,
+    taxRate: Number(row.tax_rate) || 0,
+    taxAmount: Number(row.tax_amount) || 0,
+    totalAmount: Number(row.total_amount) || 0,
+    currency: row.currency || 'USD',
+    paymentTermsDays: row.payment_terms_days ?? 14,
+    notes: row.notes || undefined,
+    items: Array.isArray(row.items) ? row.items : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapInvoiceToDB(invoice: Invoice, userIdOverride?: string): DBInvoice {
+  const finalUserId = userIdOverride || (invoice.userId && invoice.userId !== 'user-default' ? invoice.userId : (activeAuthUserId || 'user-default'));
+  return {
+    id: invoice.id,
+    user_id: finalUserId,
+    client_id: invoice.clientId,
+    client_name: invoice.clientName,
+    client_email: invoice.clientEmail || null,
+    client_company: invoice.clientCompany || null,
+    invoice_number: invoice.invoiceNumber,
+    issue_date: invoice.issueDate,
+    due_date: invoice.dueDate,
+    status: invoice.status,
+    subtotal: invoice.subtotal,
+    tax_rate: invoice.taxRate,
+    tax_amount: invoice.taxAmount,
+    total_amount: invoice.totalAmount,
+    currency: invoice.currency,
+    payment_terms_days: invoice.paymentTermsDays,
+    notes: invoice.notes || null,
+    items: invoice.items,
+    created_at: invoice.createdAt || new Date().toISOString(),
+    updated_at: invoice.updatedAt || new Date().toISOString(),
+  };
+}
+
 // ==========================================
 // Data Fetching & Sync Services
 // ==========================================
 
 export class SupabaseService {
   /**
-   * Fetch all clients, projects, tasks, and timeLogs from Supabase
+   * Fetch all clients, projects, tasks, timeLogs, and invoices for authenticated user
    */
-  public static async fetchAllData(): Promise<{
+  public static async fetchAllData(userId?: string): Promise<{
     clients: Client[];
     projects: Project[];
     tasks: Task[];
     timeLogs: TimeLog[];
+    invoices: Invoice[];
   } | null> {
     const client = getSupabaseClient();
     if (!client) return null;
 
     try {
-      const [clientsRes, projectsRes, tasksRes, logsRes] = await Promise.all([
+      const [clientsRes, projectsRes, tasksRes, logsRes, invoicesRes] = await Promise.all([
         client.from('clients').select('*').order('created_at', { ascending: false }),
         client.from('projects').select('*').order('created_at', { ascending: false }),
         client.from('tasks').select('*').order('order_index', { ascending: true }),
         client.from('time_logs').select('*').order('start_time', { ascending: false }),
+        client.from('invoices').select('*').order('issue_date', { ascending: false }),
       ]);
 
       if (clientsRes.error || projectsRes.error || tasksRes.error || logsRes.error) {
@@ -249,11 +377,18 @@ export class SupabaseService {
         return null;
       }
 
+      const clients = (clientsRes.data || []).map(mapClientFromDB);
+      const projects = (projectsRes.data || []).map(mapProjectFromDB);
+      const tasks = (tasksRes.data || []).map(mapTaskFromDB);
+      const timeLogs = (logsRes.data || []).map(mapTimeLogFromDB);
+      const invoices = (invoicesRes.data || []).map(mapInvoiceFromDB);
+
       return {
-        clients: (clientsRes.data || []).map(mapClientFromDB),
-        projects: (projectsRes.data || []).map(mapProjectFromDB),
-        tasks: (tasksRes.data || []).map(mapTaskFromDB),
-        timeLogs: (logsRes.data || []).map(mapTimeLogFromDB),
+        clients: userId ? clients.filter(c => !c.userId || c.userId === userId) : clients,
+        projects: userId ? projects.filter(p => !p.userId || p.userId === userId) : projects,
+        tasks: userId ? tasks.filter(t => !t.userId || t.userId === userId) : tasks,
+        timeLogs: userId ? timeLogs.filter(l => !l.userId || l.userId === userId) : timeLogs,
+        invoices: userId ? invoices.filter(i => !i.userId || i.userId === userId) : invoices,
       };
     } catch (err) {
       console.warn('[Supabase] Network error during fetchAllData:', err);
@@ -261,12 +396,67 @@ export class SupabaseService {
     }
   }
 
+  // --- USER PROFILE SERVICES ---
+  public static async getProfile(userId: string): Promise<UserProfile | null> {
+    const client = getSupabaseClient();
+    if (!client) return null;
+
+    try {
+      const { data, error } = await client
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[Supabase] Error fetching profile:', error.message);
+        return null;
+      }
+      return data ? mapProfileFromDB(data) : null;
+    } catch (err) {
+      console.warn('[Supabase] Network error fetching profile:', err);
+      return null;
+    }
+  }
+
+  public static async upsertProfile(profile: Partial<UserProfile> & { id: string; email: string }): Promise<UserProfile | null> {
+    const client = getSupabaseClient();
+    if (!client) return null;
+
+    try {
+      const payload: Record<string, any> = {
+        id: profile.id,
+        email: profile.email,
+        updated_at: new Date().toISOString(),
+      };
+      if (profile.fullName !== undefined) payload.full_name = profile.fullName;
+      if (profile.businessName !== undefined) payload.business_name = profile.businessName;
+      if (profile.avatarUrl !== undefined) payload.avatar_url = profile.avatarUrl;
+
+      const { data, error } = await client
+        .from('profiles')
+        .upsert(payload)
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[Supabase] Error upserting profile:', error.message);
+        return null;
+      }
+      return data ? mapProfileFromDB(data) : null;
+    } catch (err) {
+      console.warn('[Supabase] Network error upserting profile:', err);
+      return null;
+    }
+  }
+
   // --- CLIENT CRUD ---
-  public static async insertClient(clientData: Client): Promise<boolean> {
+  public static async insertClient(clientData: Client, userId?: string): Promise<boolean> {
     const client = getSupabaseClient();
     if (!client) return false;
     try {
-      const { error } = await client.from('clients').insert([mapClientToDB(clientData)]);
+      const dbRow = mapClientToDB(clientData, userId);
+      const { error } = await client.from('clients').insert([dbRow]);
       if (error) console.error('[Supabase] Error inserting client:', error);
       return !error;
     } catch (err) {
@@ -314,11 +504,12 @@ export class SupabaseService {
   }
 
   // --- PROJECT CRUD ---
-  public static async insertProject(projectData: Project): Promise<boolean> {
+  public static async insertProject(projectData: Project, userId?: string): Promise<boolean> {
     const client = getSupabaseClient();
     if (!client) return false;
     try {
-      const { error } = await client.from('projects').insert([mapProjectToDB(projectData)]);
+      const dbRow = mapProjectToDB(projectData, userId);
+      const { error } = await client.from('projects').insert([dbRow]);
       if (error) console.error('[Supabase] Error inserting project:', error);
       return !error;
     } catch (err) {
@@ -338,6 +529,11 @@ export class SupabaseService {
       if (updates.description !== undefined) dbUpdates.description = updates.description ?? null;
       if (updates.billingType !== undefined) dbUpdates.billing_type = updates.billingType;
       if (updates.rate !== undefined) dbUpdates.rate = updates.rate;
+      if (updates.contractTotal !== undefined) dbUpdates.contract_total = updates.contractTotal ?? null;
+      if (updates.milestones !== undefined) dbUpdates.milestones = updates.milestones;
+      if (updates.retainerMonthlyFee !== undefined) dbUpdates.retainer_monthly_fee = updates.retainerMonthlyFee ?? null;
+      if (updates.retainerHoursCap !== undefined) dbUpdates.retainer_hours_cap = updates.retainerHoursCap ?? null;
+      if (updates.retainerOvertimeRate !== undefined) dbUpdates.retainer_overtime_rate = updates.retainerOvertimeRate ?? null;
       if (updates.budgetHours !== undefined) dbUpdates.budget_hours = updates.budgetHours ?? null;
       if (updates.budgetAmount !== undefined) dbUpdates.budget_amount = updates.budgetAmount ?? null;
       if (updates.deadline !== undefined) dbUpdates.deadline = updates.deadline ?? null;
@@ -366,11 +562,12 @@ export class SupabaseService {
   }
 
   // --- TASK CRUD ---
-  public static async insertTask(taskData: Task): Promise<boolean> {
+  public static async insertTask(taskData: Task, userId?: string): Promise<boolean> {
     const client = getSupabaseClient();
     if (!client) return false;
     try {
-      const { error } = await client.from('tasks').insert([mapTaskToDB(taskData)]);
+      const dbRow = mapTaskToDB(taskData, userId);
+      const { error } = await client.from('tasks').insert([dbRow]);
       if (error) console.error('[Supabase] Error inserting task:', error);
       return !error;
     } catch (err) {
@@ -409,11 +606,12 @@ export class SupabaseService {
   }
 
   // --- TIME LOG CRUD ---
-  public static async insertTimeLog(logData: TimeLog): Promise<boolean> {
+  public static async insertTimeLog(logData: TimeLog, userId?: string): Promise<boolean> {
     const client = getSupabaseClient();
     if (!client) return false;
     try {
-      const { error } = await client.from('time_logs').insert([mapTimeLogToDB(logData)]);
+      const dbRow = mapTimeLogToDB(logData, userId);
+      const { error } = await client.from('time_logs').insert([dbRow]);
       if (error) console.error('[Supabase] Error inserting time log:', error);
       return !error;
     } catch (err) {
@@ -455,16 +653,64 @@ export class SupabaseService {
     }
   }
 
+  // --- INVOICE CRUD ---
+  public static async insertInvoice(invoiceData: Invoice, userId?: string): Promise<boolean> {
+    const client = getSupabaseClient();
+    if (!client) return false;
+    try {
+      const dbRow = mapInvoiceToDB(invoiceData, userId);
+      const { error } = await client.from('invoices').insert([dbRow]);
+      if (error) console.error('[Supabase] Error inserting invoice:', error);
+      return !error;
+    } catch (err) {
+      console.error('[Supabase] Error inserting invoice:', err);
+      return false;
+    }
+  }
+
+  public static async updateInvoiceStatus(id: string, status: InvoiceStatus): Promise<boolean> {
+    const client = getSupabaseClient();
+    if (!client) return false;
+    try {
+      const { error } = await client
+        .from('invoices')
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (error) console.error('[Supabase] Error updating invoice status:', error);
+      return !error;
+    } catch (err) {
+      console.error('[Supabase] Error updating invoice status:', err);
+      return false;
+    }
+  }
+
+  public static async deleteInvoice(id: string): Promise<boolean> {
+    const client = getSupabaseClient();
+    if (!client) return false;
+    try {
+      const { error } = await client.from('invoices').delete().eq('id', id);
+      if (error) console.error('[Supabase] Error deleting invoice:', error);
+      return !error;
+    } catch (err) {
+      console.error('[Supabase] Error deleting invoice:', err);
+      return false;
+    }
+  }
+
   // --- BATCH SEEDING ---
   /**
-   * Sync/push local data into Supabase (useful for initial project setup or migrating local state)
+   * Sync/push local data into Supabase scoped to the authenticated user
    */
   public static async seedLocalDataToSupabase(data: {
     clients: Client[];
     projects: Project[];
     tasks: Task[];
     timeLogs: TimeLog[];
-  }): Promise<{ success: boolean; message: string }> {
+    invoices?: Invoice[];
+  }, userId?: string): Promise<{ success: boolean; message: string }> {
     const client = getSupabaseClient();
     if (!client) {
       return { success: false, message: 'Supabase client is not configured.' };
@@ -475,7 +721,7 @@ export class SupabaseService {
       if (data.clients.length > 0) {
         const { error: cErr } = await client
           .from('clients')
-          .upsert(data.clients.map(mapClientToDB));
+          .upsert(data.clients.map(c => mapClientToDB(c, userId)));
         if (cErr) throw new Error(`Clients sync failed: ${cErr.message}`);
       }
 
@@ -483,7 +729,7 @@ export class SupabaseService {
       if (data.projects.length > 0) {
         const { error: pErr } = await client
           .from('projects')
-          .upsert(data.projects.map(mapProjectToDB));
+          .upsert(data.projects.map(p => mapProjectToDB(p, userId)));
         if (pErr) throw new Error(`Projects sync failed: ${pErr.message}`);
       }
 
@@ -491,7 +737,7 @@ export class SupabaseService {
       if (data.tasks.length > 0) {
         const { error: tErr } = await client
           .from('tasks')
-          .upsert(data.tasks.map(mapTaskToDB));
+          .upsert(data.tasks.map(t => mapTaskToDB(t, userId)));
         if (tErr) throw new Error(`Tasks sync failed: ${tErr.message}`);
       }
 
@@ -499,8 +745,16 @@ export class SupabaseService {
       if (data.timeLogs.length > 0) {
         const { error: lErr } = await client
           .from('time_logs')
-          .upsert(data.timeLogs.map(mapTimeLogToDB));
+          .upsert(data.timeLogs.map(l => mapTimeLogToDB(l, userId)));
         if (lErr) throw new Error(`Time logs sync failed: ${lErr.message}`);
+      }
+
+      // 5. Insert invoices if present
+      if (data.invoices && data.invoices.length > 0) {
+        const { error: iErr } = await client
+          .from('invoices')
+          .upsert(data.invoices.map(i => mapInvoiceToDB(i, userId)));
+        if (iErr) console.warn('Invoices sync notice (table may need creation):', iErr.message);
       }
 
       return {
