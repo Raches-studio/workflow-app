@@ -185,7 +185,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onOpenSupabaseModal }) => {
           {activeError && (
             <div className="mb-5 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300 animate-fadeIn">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
-              <div className="flex-1 leading-relaxed">{activeError}</div>
+              <div className="flex-1 leading-relaxed">
+                <div>{activeError}</div>
+                {activeError.toLowerCase().includes('supabase') && onOpenSupabaseModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenSupabaseModal}
+                    className="mt-2 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1.5"
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    <span>Open Supabase Settings & Credentials</span>
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => {

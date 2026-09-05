@@ -4,15 +4,20 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const STORAGE_KEY_URL = 'workerhub_supabase_url';
 const STORAGE_KEY_KEY = 'workerhub_supabase_anon_key';
 
+// Default project Supabase configuration (public anon key)
+const DEFAULT_SUPABASE_URL = 'https://ytusriqarhzroulxhbcq.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0dXNyaXFhcmh6cm91bHhoYmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MTc2NDQsImV4cCI6MjEwNDA5MzY0NH0.j1CER21HHvs88P-0lOw-kap43nf-W-p0OjNrgWxZUts';
+
 /**
  * Retrieve active Supabase configuration from environment variables
- * with fallback to local storage (allows in-app configuration without dev server restart).
+ * with fallback to local storage (allows in-app configuration without dev server restart),
+ * and finally fallback to project default production credentials.
  */
 export function getSupabaseConfig(): {
   url: string;
   anonKey: string;
   isConfigured: boolean;
-  source: 'env' | 'storage' | 'none';
+  source: 'env' | 'storage' | 'default' | 'none';
 } {
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
   const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
@@ -35,6 +40,16 @@ export function getSupabaseConfig(): {
       anonKey: storedKey.trim(),
       isConfigured: true,
       source: 'storage',
+    };
+  }
+
+  // Fallback to project defaults so Vercel and production deployments work seamlessly
+  if (DEFAULT_SUPABASE_URL && DEFAULT_SUPABASE_ANON_KEY) {
+    return {
+      url: DEFAULT_SUPABASE_URL,
+      anonKey: DEFAULT_SUPABASE_ANON_KEY,
+      isConfigured: true,
+      source: 'default',
     };
   }
 
