@@ -1,4 +1,5 @@
-import { getSupabaseClient } from '../lib/supabase';
+import { getSupabaseClient, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+export { supabaseUrl, supabaseAnonKey };
 import { 
   Client, 
   Project, 

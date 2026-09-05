@@ -4,20 +4,25 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const STORAGE_KEY_URL = 'workerhub_supabase_url';
 const STORAGE_KEY_KEY = 'workerhub_supabase_anon_key';
 
-// Default project Supabase configuration (public anon key)
-const DEFAULT_SUPABASE_URL = 'https://ytusriqarhzroulxhbcq.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0dXNyaXFhcmh6cm91bHhoYmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MTc2NDQsImV4cCI6MjEwNDA5MzY0NH0.j1CER21HHvs88P-0lOw-kap43nf-W-p0OjNrgWxZUts';
+// Project Supabase production credentials (public anon key)
+export const DEFAULT_SUPABASE_URL = 'https://ytusriqarhzroulxhbcq.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0dXNyaXFhcmh6cm91bHhoYmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MTc2NDQsImV4cCI6MjEwNDA5MzY0NH0.j1CER21HHvs88P-0lOw-kap43nf-W-p0OjNrgWxZUts';
+
+// Aliases for explicit imports
+export const supabaseUrl = DEFAULT_SUPABASE_URL;
+export const supabaseAnonKey = DEFAULT_SUPABASE_ANON_KEY;
 
 /**
- * Retrieve active Supabase configuration from environment variables
- * with fallback to local storage (allows in-app configuration without dev server restart),
- * and finally fallback to project default production credentials.
+ * Retrieve active Supabase configuration.
+ * Checks environment variables first, then local storage, and ALWAYS falls back
+ * to the project production credentials.
+ * `isConfigured` ALWAYS evaluates to true by default.
  */
 export function getSupabaseConfig(): {
   url: string;
   anonKey: string;
   isConfigured: boolean;
-  source: 'env' | 'storage' | 'default' | 'none';
+  source: 'env' | 'storage' | 'default';
 } {
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
   const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
@@ -43,21 +48,12 @@ export function getSupabaseConfig(): {
     };
   }
 
-  // Fallback to project defaults so Vercel and production deployments work seamlessly
-  if (DEFAULT_SUPABASE_URL && DEFAULT_SUPABASE_ANON_KEY) {
-    return {
-      url: DEFAULT_SUPABASE_URL,
-      anonKey: DEFAULT_SUPABASE_ANON_KEY,
-      isConfigured: true,
-      source: 'default',
-    };
-  }
-
+  // ALWAYS default to production credentials with isConfigured: true
   return {
-    url: '',
-    anonKey: '',
-    isConfigured: false,
-    source: 'none',
+    url: DEFAULT_SUPABASE_URL,
+    anonKey: DEFAULT_SUPABASE_ANON_KEY,
+    isConfigured: true,
+    source: 'default',
   };
 }
 
@@ -78,19 +74,24 @@ export function clearSupabaseConfig(): void {
   }
 }
 
+// Fallback pre-initialized Supabase client singleton
+export const supabase: SupabaseClient = createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+});
+
 let cachedClient: SupabaseClient | null = null;
 let cachedUrl = '';
 let cachedKey = '';
 
 /**
  * Get or create singleton Supabase client.
- * Returns null if Supabase is not yet configured.
+ * Guaranteed to return an active SupabaseClient instance (falling back to production default).
  */
-export function getSupabaseClient(): SupabaseClient | null {
+export function getSupabaseClient(): SupabaseClient {
   const config = getSupabaseConfig();
-  if (!config.isConfigured) {
-    return null;
-  }
 
   if (cachedClient && cachedUrl === config.url && cachedKey === config.anonKey) {
     return cachedClient;
@@ -107,8 +108,8 @@ export function getSupabaseClient(): SupabaseClient | null {
     cachedKey = config.anonKey;
     return cachedClient;
   } catch (err) {
-    console.warn('[Supabase] Failed to initialize Supabase client:', err);
-    return null;
+    console.warn('[Supabase] Failed to initialize Supabase client, using default client:', err);
+    return supabase;
   }
 }
 
@@ -121,12 +122,6 @@ export async function testSupabaseConnection(): Promise<{
   tableFound?: boolean;
 }> {
   const client = getSupabaseClient();
-  if (!client) {
-    return {
-      success: false,
-      message: 'Supabase credentials are not configured yet. Please enter your Project URL and Anon Key.',
-    };
-  }
 
   try {
     // Try querying clients table with limit 1
