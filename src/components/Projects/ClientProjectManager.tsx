@@ -594,13 +594,13 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
                       <input
                         type="text"
                         readOnly
-                        value={`${window.location.origin}/portal/${client.portalToken || 'cp_' + client.id}`}
+                        value={`${window.location.origin}/#/portal/${client.portalToken || 'cp_' + client.id}`}
                         className="flex-1 px-2.5 py-1 text-[10px] font-mono rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-500 truncate"
                       />
                       <button
                         type="button"
                         onClick={() => {
-                          const url = `${window.location.origin}/portal/${client.portalToken || 'cp_' + client.id}`;
+                          const url = `${window.location.origin}/#/portal/${client.portalToken || 'cp_' + client.id}`;
                           navigator.clipboard.writeText(url);
                           setCopiedClientId(client.id);
                           setTimeout(() => setCopiedClientId(null), 2000);
@@ -617,7 +617,7 @@ export function ClientProjectManager({ onGetUnstuck }: ClientProjectManagerProps
                       <button
                         type="button"
                         onClick={() => {
-                          const url = `/portal/${client.portalToken || 'cp_' + client.id}`;
+                          const url = `/#/portal/${client.portalToken || 'cp_' + client.id}`;
                           window.open(url, '_blank');
                         }}
                         className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40"

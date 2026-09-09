@@ -163,6 +163,9 @@ export function App() {
         portalToken={portalToken} 
         onExitPortal={() => {
           setPortalToken(null);
+          if (window.location.hash.includes('portal')) {
+            window.location.hash = '';
+          }
           const newUrl = window.location.pathname.replace(/\/portal\/[a-zA-Z0-9_-]+/i, '') || '/';
           window.history.pushState(null, '', newUrl);
         }} 

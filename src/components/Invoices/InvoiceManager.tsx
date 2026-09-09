@@ -555,7 +555,7 @@ export const InvoiceManager: React.FC = () => {
                           {/* 1-Click PDF Download with Payment Button Embedded */}
                           {(() => {
                             const client = clients.find((c) => c.id === invoice.clientId);
-                            const portalUrl = client?.portalToken ? `${window.location.origin}/portal/${client.portalToken}` : undefined;
+                            const portalUrl = client?.portalToken ? `${window.location.origin}/#/portal/${client.portalToken}` : undefined;
                             const payUrl = generatePaymentUrl(invoice, paymentSettings, portalUrl);
 
                             return (
@@ -595,7 +595,7 @@ export const InvoiceManager: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      window.open(`/portal/${client.portalToken}`, '_blank');
+                                      window.open(`/#/portal/${client.portalToken}`, '_blank');
                                     }}
                                     className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition"
                                     title="View in Client Portal"
