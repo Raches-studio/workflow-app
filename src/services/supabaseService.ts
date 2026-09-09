@@ -990,14 +990,34 @@ export class SupabaseService {
     paymentSettings: PaymentSettings | null;
   } | null> {
     const client = getSupabaseClient();
-    if (!client) return null;
+    if (!client || !portalToken?.trim()) return null;
 
     try {
-      // 1. Fetch Client by portal token
+      // 1. Primary: Use secure SECURITY DEFINER RPC function
+      const { data: rpcData, error: rpcErr } = await client.rpc('get_client_portal_data', {
+        p_portal_token: portalToken.trim(),
+      });
+
+      if (!rpcErr && rpcData && rpcData.client) {
+        return {
+          client: mapClientFromDB(rpcData.client),
+          projects: (rpcData.projects || []).map(mapProjectFromDB),
+          timeLogs: (rpcData.time_logs || []).map(mapTimeLogFromDB),
+          invoices: (rpcData.invoices || []).map(mapInvoiceFromDB),
+          paymentSettings: rpcData.payment_settings ? mapPaymentSettingsFromDB(rpcData.payment_settings) : null,
+        };
+      }
+
+      // If RPC is missing or returned error, attempt fallback direct query
+      if (rpcErr) {
+        console.warn('[Supabase] RPC get_client_portal_data error, trying direct query:', rpcErr.message);
+      }
+
+      // 2. Fallback: Direct table queries (for legacy setups prior to running RPC migration)
       const { data: clientData, error: clientErr } = await client
         .from('clients')
         .select('*')
-        .eq('portal_token', portalToken)
+        .eq('portal_token', portalToken.trim())
         .maybeSingle();
 
       if (clientErr || !clientData) {
@@ -1006,7 +1026,7 @@ export class SupabaseService {
 
       const mappedClient = mapClientFromDB(clientData);
 
-      // 2. Fetch Client's Projects, Approved TimeLogs, Invoices, and PaymentSettings in parallel
+      // Fetch Client's Projects, Approved TimeLogs, Invoices, and PaymentSettings in parallel
       const [projRes, logsRes, invRes, payRes] = await Promise.all([
         client.from('projects').select('*').eq('client_id', mappedClient.id),
         client.from('time_logs').select('*').eq('client_id', mappedClient.id).eq('approval_status', 'approved'),
