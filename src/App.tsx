@@ -3,14 +3,25 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Clock, 
   Briefcase, 
-  Receipt,
-  CheckSquare,
+  Receipt, 
+  CheckSquare, 
   Flower2, 
   Square, 
   Moon, 
   Sun, 
-  Database
+  Database, 
+  Sparkles,
+  LayoutDashboard,
+  Users,
+  LogIn,
+  X
 } from 'lucide-react';
+import { BlackHoleHeroSectionDemo } from '@/components/ui/demo';
+import { 
+  SidebarNav, 
+  SmartWorkplaceDashboard, 
+  TeamWorkspaceView 
+} from './components/SmartWorkplace';
 import { TimeTracker } from './components/TimeTracker/TimeTracker';
 import { ClientProjectManager } from './components/Projects/ClientProjectManager';
 import { InvoiceManager } from './components/Invoices/InvoiceManager';
@@ -54,10 +65,12 @@ function getPortalTokenFromUrl(): string | null {
 }
 
 export function App() {
-  const [activeScreen, setActiveScreen] = useState<'tracker' | 'projects' | 'invoices' | 'approvals'>('tracker');
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const [activeScreen, setActiveScreen] = useState<'dashboard' | 'team' | 'projects' | 'tracker' | 'invoices' | 'approvals'>('dashboard');
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [showHeroPreview, setShowHeroPreview] = useState<boolean>(false);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [rachesInitialPrompt, setRachesInitialPrompt] = useState<string | undefined>();
   const [portalToken, setPortalToken] = useState<string | null>(() => getPortalTokenFromUrl());
 
@@ -94,7 +107,7 @@ export function App() {
   // Safe fallback if role switched to member while on restricted screens
   useEffect(() => {
     if (isMember && (activeScreen === 'approvals' || activeScreen === 'invoices')) {
-      setActiveScreen('tracker');
+      setActiveScreen('dashboard');
     }
   }, [isMember, activeScreen]);
 
@@ -133,7 +146,7 @@ export function App() {
   }, [tasks, taskId]);
 
   const appContext: CurrentAppContext = useMemo(() => ({
-    currentPage: activeScreen,
+    currentPage: (activeScreen === 'dashboard' || activeScreen === 'team' ? 'tracker' : activeScreen) as any,
     activeProjectId: activeProject?.id,
     activeProjectName: activeProject?.name,
     activeTaskId: activeTask?.id,
@@ -156,7 +169,6 @@ export function App() {
   };
 
   // --- CLIENT PORTAL ACCESS (PUBLIC READ-ONLY ACCESS) ---
-  // If URL contains a portal token, render the ClientPortalView immediately without requiring login
   if (portalToken) {
     return (
       <ClientPortalView 
@@ -176,232 +188,298 @@ export function App() {
   // --- ROUTE PROTECTION: LOADING STATE ---
   if (isLoading) {
     return (
-      <div className={`min-h-screen flex flex-col items-center justify-center ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors`}>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#121418] text-slate-100">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 via-indigo-600 to-violet-600 flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-sky-500/25 animate-pulse">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-orange-500 via-orange-600 to-amber-500 flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-orange-500/25 animate-pulse">
             W
           </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-            <div className="w-3.5 h-3.5 border-2 border-sky-500/30 border-t-sky-500 rounded-full animate-spin" />
-            <span>Verifying authentication...</span>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <div className="w-3.5 h-3.5 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+            <span>Connecting to WorkHub Smart Grid...</span>
           </div>
         </div>
       </div>
     );
   }
 
-  // --- ROUTE PROTECTION: UNAUTHENTICATED USERS REDIRECTED TO LOGIN ---
-  if (!user) {
-    return (
-      <div className={isDarkMode ? 'dark' : ''}>
-        <AuthPage onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)} />
-        <SupabaseModal 
-          isOpen={isSupabaseModalOpen} 
-          onClose={() => setIsSupabaseModalOpen(false)} 
-        />
-      </div>
-    );
-  }
-
-  // --- AUTHENTICATED APPLICATION SHELL ---
+  // --- MAIN APPLICATION SHELL (WITH SLEEK SIDEBAR & SMART DASHBOARD) ---
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors`}>
-      {/* --- GLOBAL APPLICATION HEADER --- */}
-      <header className="sticky top-0 z-40 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 py-3">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-          
-          {/* Logo & Slogan */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 via-indigo-600 to-violet-600 flex items-center justify-center text-white font-black text-lg shadow-md shadow-sky-500/20">
-              W
-            </div>
-            <div>
-              <div className="font-bold text-base tracking-tight flex items-center gap-1.5">
-                WorkFlow
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800">
-                  MVP
-                </span>
+    <div className={`min-h-screen bg-[#121418] text-slate-100 flex flex-col lg:flex-row transition-colors ${isDarkMode ? 'dark' : ''}`}>
+      
+      {/* Sleek Desktop Sidebar Navigation */}
+      <SidebarNav
+        currentView={
+          activeScreen === 'team'
+            ? 'team'
+            : activeScreen === 'projects'
+            ? 'projects'
+            : activeScreen === 'tracker'
+            ? 'analytics'
+            : 'dashboard'
+        }
+        onSelectView={(v) => {
+          if (v === 'dashboard') setActiveScreen('dashboard');
+          else if (v === 'team') setActiveScreen('team');
+          else if (v === 'projects') setActiveScreen('projects');
+          else if (v === 'analytics') setActiveScreen('tracker');
+        }}
+      />
+
+      {/* Main App Content Viewport */}
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* Top Header Bar */}
+        <header className="sticky top-0 z-40 bg-[#121418]/85 backdrop-blur-xl border-b border-white/10 px-4 md:px-8 py-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            
+            {/* Mobile / Tablet Logo & Switcher */}
+            <div className="flex items-center gap-3">
+              <div className="lg:hidden w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white font-black text-sm shadow-md shadow-orange-500/20">
+                W
               </div>
-              <p className="hidden sm:block text-[11px] text-slate-500">Work smarter. Stay organized. Get paid.</p>
+
+              {/* Navigation Pill Strip (Shown on all screen sizes for fast switching) */}
+              <nav className="flex items-center gap-1 overflow-x-auto py-0.5 max-w-full">
+                <button
+                  onClick={() => setActiveScreen('dashboard')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
+                    activeScreen === 'dashboard'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  <span>Dashboard</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveScreen('team')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
+                    activeScreen === 'team'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Team & Workspace</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveScreen('projects')}
+                  className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
+                    activeScreen === 'projects'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>Projects</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveScreen('tracker')}
+                  className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
+                    activeScreen === 'tracker'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Tracker</span>
+                </button>
+
+                {!isMember && (
+                  <button
+                    onClick={() => setActiveScreen('invoices')}
+                    className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
+                      activeScreen === 'invoices'
+                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>Invoices</span>
+                  </button>
+                )}
+
+                {canApprove && (
+                  <button
+                    onClick={() => setActiveScreen('approvals')}
+                    className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 relative ${
+                      activeScreen === 'approvals'
+                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>Approvals</span>
+                    {pendingApprovalsCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+                        {pendingApprovalsCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setShowHeroPreview(true)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition shrink-0"
+                  title="Preview Black Hole Hero Section"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span className="hidden sm:inline">Hero</span>
+                </button>
+              </nav>
             </div>
-          </div>
 
-          {/* Navigation Pill Strip */}
-          <nav className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-            <button
-              onClick={() => setActiveScreen('tracker')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition ${
-                activeScreen === 'tracker'
-                  ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Time Tracker</span>
-            </button>
-
-            <button
-              onClick={() => setActiveScreen('projects')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition ${
-                activeScreen === 'projects'
-                  ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              <Briefcase className="w-3.5 h-3.5" />
-              <span>Projects & Clients</span>
-            </button>
-
-            {/* Invoices: Hidden for members, available to managers & admins */}
-            {!isMember && (
+            {/* Right Action Strip */}
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              
+              {/* Supabase Status Button */}
               <button
-                onClick={() => setActiveScreen('invoices')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition ${
-                  activeScreen === 'invoices'
-                    ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                onClick={() => setIsSupabaseModalOpen(true)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition active:scale-95 ${
+                  supabaseStatus === 'connected'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                    : 'bg-white/5 text-slate-300 border-white/10 hover:border-orange-500/40 hover:text-orange-400'
                 }`}
+                title="Configure Supabase Cloud"
               >
-                <Receipt className="w-3.5 h-3.5" />
-                <span>Invoices</span>
-              </button>
-            )}
-
-            {/* Approvals: Available to Managers & Admins */}
-            {canApprove && (
-              <button
-                onClick={() => setActiveScreen('approvals')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition relative ${
-                  activeScreen === 'approvals'
-                    ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                <CheckSquare className="w-3.5 h-3.5" />
-                <span>Approvals</span>
-                {pendingApprovalsCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white animate-pulse">
-                    {pendingApprovalsCount}
-                  </span>
+                <Database className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="hidden md:inline">
+                  {supabaseStatus === 'connected' ? 'Cloud Synced' : isSyncing ? 'Syncing...' : 'Connect Cloud'}
+                </span>
+                {supabaseStatus === 'connected' && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 )}
               </button>
-            )}
-          </nav>
 
-          {/* Right Action Strip: Cloud, Raches, Active Timer, Unbilled, Theme, User Menu */}
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Supabase Cloud Connection Status Button */}
-            <button
-              onClick={() => setIsSupabaseModalOpen(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition active:scale-95 ${
-                supabaseStatus === 'connected'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
-                  : supabaseStatus === 'checking' || isSyncing
-                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 animate-pulse'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400 shadow-sm'
-              }`}
-              title="Configure Supabase Cloud Database"
-            >
-              <Database className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span className="hidden md:inline">
-                {supabaseStatus === 'connected' 
-                  ? 'Cloud Synced' 
-                  : supabaseStatus === 'checking' || isSyncing 
-                  ? 'Syncing...' 
-                  : 'Connect Supabase'}
-              </span>
-              {supabaseStatus === 'connected' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {/* Raches AI Co-pilot Button */}
+              <button
+                onClick={() => {
+                  setRachesInitialPrompt(undefined);
+                  setIsAiDrawerOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white shadow-md shadow-orange-500/20 transition active:scale-95 border border-orange-400/30"
+                title="Open Rachel AI Assistant"
+              >
+                <Flower2 className="w-3.5 h-3.5 text-white" />
+                <span className="font-bold tracking-tight">Raches 🌸</span>
+              </button>
+
+              {/* Active Timer Pill */}
+              {status === 'running' && (
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-mono text-xs font-bold text-emerald-400">
+                    {formatDuration(headerTimerSeconds)}
+                  </span>
+                  <button
+                    onClick={() => stopTimer()}
+                    className="p-1 rounded text-emerald-400 hover:text-rose-400 transition"
+                    title="Stop Timer"
+                  >
+                    <Square className="w-3 h-3 fill-current" />
+                  </button>
+                </div>
               )}
-            </button>
 
-            {/* Rachel AI Trigger Button */}
-            <button
-              onClick={() => {
-                setRachesInitialPrompt(undefined);
-                setIsAiDrawerOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-sky-400 via-sky-500 to-sky-600 hover:from-sky-500 hover:to-sky-700 text-white shadow-sm shadow-sky-500/25 transition active:scale-95 border border-sky-300/40"
-              title="Open Raches AI Co-pilot"
-            >
-              <Flower2 className="w-3.5 h-3.5 text-white animate-spin-slow" />
-              <span className="font-bold tracking-tight">Raches 🌸</span>
-            </button>
+              {/* Unbilled Quick Counter */}
+              {!isMember && (
+                <div className="hidden xl:flex flex-col items-end text-right">
+                  <span className="text-[10px] uppercase font-semibold text-slate-500">Unbilled</span>
+                  <span className="text-xs font-mono font-bold text-slate-300">
+                    {formatCurrency(unbilled.unbilledTotalAmount)}
+                  </span>
+                </div>
+              )}
 
-            {/* Active Timer Pill */}
-            {status === 'running' && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                  {formatDuration(headerTimerSeconds)}
-                </span>
+              {/* Theme Toggle */}
+              <button
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className="p-2 rounded-xl border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition"
+                title="Toggle Dark/Light Mode"
+              >
+                {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-400" />}
+              </button>
+
+              {/* Sign In button or Profile Menu */}
+              {!user ? (
                 <button
-                  onClick={() => stopTimer()}
-                  className="p-1 rounded text-emerald-700 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                  title="Stop Active Timer"
+                  onClick={() => setShowAuthModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition shadow-sm"
                 >
-                  <Square className="w-3 h-3 fill-current" />
+                  <LogIn className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Sign In</span>
                 </button>
-              </div>
-            )}
+              ) : (
+                <UserProfileMenu onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)} />
+              )}
 
-            {/* Unbilled Quick Counter (masked for member role) */}
-            {!isMember && (
-              <div className="hidden lg:flex flex-col items-end text-right">
-                <span className="text-[10px] uppercase font-semibold text-slate-400">Unbilled</span>
-                <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
-                  {formatCurrency(unbilled.unbilledTotalAmount)}
-                </span>
-              </div>
-            )}
-
-            {/* Theme Toggle */}
-            <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              title="Toggle Dark/Light Mode"
-            >
-              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            {/* User Profile Dropdown Menu */}
-            <UserProfileMenu onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)} />
+            </div>
 
           </div>
+        </header>
 
-        </div>
-      </header>
+        {/* Main Body */}
+        <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 w-full flex-1">
+          {activeScreen === 'dashboard' && <SmartWorkplaceDashboard />}
+          {activeScreen === 'team' && <TeamWorkspaceView />}
+          {activeScreen === 'projects' && <ClientProjectManager onGetUnstuck={handleGetUnstuck} />}
+          {activeScreen === 'tracker' && <TimeTracker onGetUnstuck={handleGetUnstuck} />}
+          {activeScreen === 'invoices' && !isMember && <InvoiceManager />}
+          {activeScreen === 'approvals' && canApprove && <ApprovalsDashboard />}
+        </main>
 
-      {/* --- MAIN PAGE CONTENT --- */}
-      <main className="max-w-6xl mx-auto px-4 md:px-8 py-8">
-        {activeScreen === 'tracker' && (
-          <TimeTracker onGetUnstuck={handleGetUnstuck} />
-        )}
-        {activeScreen === 'projects' && (
-          <ClientProjectManager onGetUnstuck={handleGetUnstuck} />
-        )}
-        {activeScreen === 'invoices' && !isMember && (
-          <InvoiceManager />
-        )}
-        {activeScreen === 'approvals' && canApprove && (
-          <ApprovalsDashboard />
-        )}
-      </main>
+        {/* Rachel AI Assistant Drawer */}
+        <AIAssistantDrawer
+          isOpen={isAiDrawerOpen}
+          onClose={() => setIsAiDrawerOpen(false)}
+          appContext={appContext}
+          initialPrompt={rachesInitialPrompt}
+          onClearInitialPrompt={() => setRachesInitialPrompt(undefined)}
+        />
 
-      {/* --- RACHES (RACHEL) AI ASSISTANT DRAWER --- */}
-      <AIAssistantDrawer 
-        isOpen={isAiDrawerOpen} 
-        onClose={() => setIsAiDrawerOpen(false)}
-        appContext={appContext}
-        initialPrompt={rachesInitialPrompt}
-        onClearInitialPrompt={() => setRachesInitialPrompt(undefined)}
-      />
+        {/* Supabase Configuration Modal */}
+        <SupabaseModal
+          isOpen={isSupabaseModalOpen}
+          onClose={() => setIsSupabaseModalOpen(false)}
+        />
 
-      {/* --- SUPABASE CONFIGURATION MODAL --- */}
-      <SupabaseModal 
-        isOpen={isSupabaseModalOpen} 
-        onClose={() => setIsSupabaseModalOpen(false)} 
-      />
+        {/* Auth Modal if user clicks Sign In */}
+        {showAuthModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+            <div className="relative w-full max-w-md my-8">
+              <div className="absolute top-4 right-4 z-50">
+                <button
+                  onClick={() => setShowAuthModal(false)}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <AuthPage onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)} />
+            </div>
+          </div>
+        )}
+
+        {/* Black Hole Hero Preview Overlay */}
+        {showHeroPreview && (
+          <div className="fixed inset-0 z-50 bg-black overflow-y-auto">
+            <div className="fixed top-4 right-4 z-[60]">
+              <button
+                onClick={() => setShowHeroPreview(false)}
+                className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-md transition border border-white/20 shadow-lg"
+              >
+                ✕ Exit Preview
+              </button>
+            </div>
+            <BlackHoleHeroSectionDemo />
+          </div>
+        )}
+
+      </div>
+
     </div>
   );
 }
