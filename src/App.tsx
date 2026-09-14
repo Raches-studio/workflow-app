@@ -12,6 +12,7 @@ import {
   Database, 
   Sparkles,
   LayoutDashboard,
+  Calendar,
   Users,
   LogIn,
   X
@@ -20,7 +21,9 @@ import { BlackHoleHeroSectionDemo } from '@/components/ui/demo';
 import { 
   SidebarNav, 
   SmartWorkplaceDashboard, 
-  TeamWorkspaceView 
+  TeamWorkspaceView,
+  CalendarScheduleView,
+  FloatingNotificationTray
 } from './components/SmartWorkplace';
 import { TimeTracker } from './components/TimeTracker/TimeTracker';
 import { ClientProjectManager } from './components/Projects/ClientProjectManager';
@@ -65,7 +68,7 @@ function getPortalTokenFromUrl(): string | null {
 }
 
 export function App() {
-  const [activeScreen, setActiveScreen] = useState<'dashboard' | 'team' | 'projects' | 'tracker' | 'invoices' | 'approvals'>('dashboard');
+  const [activeScreen, setActiveScreen] = useState<'dashboard' | 'calendar' | 'team' | 'projects' | 'tracker' | 'invoices' | 'approvals'>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
@@ -209,7 +212,9 @@ export function App() {
       {/* Sleek Desktop Sidebar Navigation */}
       <SidebarNav
         currentView={
-          activeScreen === 'team'
+          activeScreen === 'calendar'
+            ? 'calendar'
+            : activeScreen === 'team'
             ? 'team'
             : activeScreen === 'projects'
             ? 'projects'
@@ -219,6 +224,7 @@ export function App() {
         }
         onSelectView={(v) => {
           if (v === 'dashboard') setActiveScreen('dashboard');
+          else if (v === 'calendar') setActiveScreen('calendar');
           else if (v === 'team') setActiveScreen('team');
           else if (v === 'projects') setActiveScreen('projects');
           else if (v === 'analytics') setActiveScreen('tracker');
@@ -250,6 +256,18 @@ export function App() {
                 >
                   <LayoutDashboard className="w-3.5 h-3.5" />
                   <span>Dashboard</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveScreen('calendar')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
+                    activeScreen === 'calendar'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Schedule</span>
                 </button>
 
                 <button
@@ -424,6 +442,7 @@ export function App() {
         {/* Main Body */}
         <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 w-full flex-1">
           {activeScreen === 'dashboard' && <SmartWorkplaceDashboard />}
+          {activeScreen === 'calendar' && <CalendarScheduleView />}
           {activeScreen === 'team' && <TeamWorkspaceView />}
           {activeScreen === 'projects' && <ClientProjectManager onGetUnstuck={handleGetUnstuck} />}
           {activeScreen === 'tracker' && <TimeTracker onGetUnstuck={handleGetUnstuck} />}
@@ -477,6 +496,9 @@ export function App() {
             <BlackHoleHeroSectionDemo />
           </div>
         )}
+
+        {/* Floating Notification & Reminder Tray */}
+        <FloatingNotificationTray />
 
       </div>
 

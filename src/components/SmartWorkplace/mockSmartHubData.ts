@@ -45,6 +45,29 @@ export interface LiveMeetingRoom {
   topic: string;
   duration: string;
   isScreenSharing: boolean;
+  meetingUrl?: string;
+  platform?: 'google_meet' | 'zoom' | 'custom';
+  scheduledTime?: string;
+  date?: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  type: 'meeting' | 'deadline' | 'focus_block';
+  date: string;
+  dayOfWeek: number; // 0-6 (Sun-Sat)
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  platform?: 'google_meet' | 'zoom' | 'custom';
+  meetingUrl?: string;
+  projectId?: string;
+  projectName?: string;
+  taskId?: string;
+  isCompleted?: boolean;
+  priority?: 'high' | 'medium' | 'low';
+  description?: string;
 }
 
 export interface TeamActivityItem {
@@ -192,6 +215,10 @@ export const LIVE_MEETING_ROOMS: LiveMeetingRoom[] = [
     category: 'Studio Alpha',
     status: 'live',
     participantCount: 5,
+    meetingUrl: 'https://meet.google.com/qmv-rtza-jkh',
+    platform: 'google_meet',
+    scheduledTime: '10:00 - 11:00 AM',
+    date: 'Today',
     participants: [
       {
         name: 'Maria Zakharova',
@@ -218,7 +245,6 @@ export const LIVE_MEETING_ROOMS: LiveMeetingRoom[] = [
         isMuted: true,
       },
     ],
-    // High-end modern glass meeting space / video presentation
     previewImageUrl: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=900&auto=format&fit=crop&q=80',
     topic: 'Q3 Mobile Architecture & Deliverables Sign-off',
     duration: '24:18',
@@ -230,6 +256,10 @@ export const LIVE_MEETING_ROOMS: LiveMeetingRoom[] = [
     category: 'Executive Suite',
     status: 'live',
     participantCount: 3,
+    meetingUrl: 'https://zoom.us/j/8492048591',
+    platform: 'zoom',
+    scheduledTime: '2:30 - 3:30 PM',
+    date: 'Today',
     participants: [
       {
         name: 'Sarah Jenkins',
@@ -249,11 +279,115 @@ export const LIVE_MEETING_ROOMS: LiveMeetingRoom[] = [
     category: 'Dev Lounge',
     status: 'upcoming',
     participantCount: 8,
+    meetingUrl: 'https://meet.google.com/wop-bnva-xyz',
+    platform: 'google_meet',
+    scheduledTime: '4:00 - 4:30 PM',
+    date: 'Today',
     participants: [],
     previewImageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=900&auto=format&fit=crop&q=80',
     topic: 'Blocker Removal & API Endpoint Release',
     duration: 'Scheduled in 30m',
     isScreenSharing: false,
+  },
+];
+
+export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
+  {
+    id: 'cal-1',
+    title: 'Sprint Design Review',
+    type: 'meeting',
+    date: 'Today',
+    dayOfWeek: 1, // Monday
+    startTime: '10:00 AM',
+    endTime: '11:00 AM',
+    durationMinutes: 60,
+    platform: 'google_meet',
+    meetingUrl: 'https://meet.google.com/qmv-rtza-jkh',
+    projectName: 'Mobile Crypto Wallet',
+    description: 'Q3 Mobile Architecture & Deliverables Sign-off with Lead Engineers.',
+  },
+  {
+    id: 'cal-2',
+    title: 'Deep Focus Sprint: Biometric Auth',
+    type: 'focus_block',
+    date: 'Today',
+    dayOfWeek: 1,
+    startTime: '11:30 AM',
+    endTime: '12:15 PM',
+    durationMinutes: 45,
+    taskId: 'task-2',
+    projectName: 'Mobile Crypto Wallet MVP',
+    isCompleted: false,
+    description: '45m Pomodoro block for Biometric Auth & FaceID Flow implementation.',
+  },
+  {
+    id: 'cal-3',
+    title: 'Client Workshop Sync',
+    type: 'meeting',
+    date: 'Today',
+    dayOfWeek: 1,
+    startTime: '02:30 PM',
+    endTime: '03:30 PM',
+    durationMinutes: 60,
+    platform: 'zoom',
+    meetingUrl: 'https://zoom.us/j/8492048591',
+    projectName: 'Brand Identity Portal',
+    description: 'Acme Design Brand Guidelines Review and client stakeholder feedback.',
+  },
+  {
+    id: 'cal-4',
+    title: 'Brand Portal CSS Tokens Delivery',
+    type: 'deadline',
+    date: 'Tomorrow',
+    dayOfWeek: 2, // Tuesday
+    startTime: '05:00 PM',
+    endTime: '05:00 PM',
+    durationMinutes: 0,
+    priority: 'high',
+    projectName: 'Brand Identity & Web Portal',
+    description: 'Client signoff cutoff for design token system.',
+  },
+  {
+    id: 'cal-5',
+    title: 'Deep Focus Sprint: Invoice PDF Engine',
+    type: 'focus_block',
+    date: 'Tomorrow',
+    dayOfWeek: 2,
+    startTime: '09:00 AM',
+    endTime: '09:45 AM',
+    durationMinutes: 45,
+    taskId: 'task-3',
+    projectName: 'Internal Platform Tooling',
+    isCompleted: false,
+    description: 'Automated Invoice PDF generation and digital signature stamping.',
+  },
+  {
+    id: 'cal-6',
+    title: 'Cross-Team Architecture Sync',
+    type: 'meeting',
+    date: 'Wednesday',
+    dayOfWeek: 3,
+    startTime: '03:00 PM',
+    endTime: '03:45 PM',
+    durationMinutes: 45,
+    platform: 'google_meet',
+    meetingUrl: 'https://meet.google.com/arc-sync-hub',
+    projectName: 'Cloud Security Grid',
+    description: 'Cloud Security Architecture review with Alex Rivera.',
+  },
+  {
+    id: 'cal-7',
+    title: 'Deep Focus Sprint: Token Systems',
+    type: 'focus_block',
+    date: 'Thursday',
+    dayOfWeek: 4,
+    startTime: '01:00 PM',
+    endTime: '01:30 PM',
+    durationMinutes: 30,
+    taskId: 'task-1',
+    projectName: 'Brand Identity & Web Portal',
+    isCompleted: true,
+    description: 'Completed 30m sprint on design tokens.',
   },
 ];
 

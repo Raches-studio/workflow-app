@@ -9,4 +9,6 @@ export * from './SecurityStreamCard';
 export * from './WidgetsGrid';
 export * from './TeamWorkspaceView';
 export * from './InviteMemberModal';
+export * from './CalendarScheduleView';
+export * from './FloatingNotificationTray';
 export * from './mockSmartHubData';

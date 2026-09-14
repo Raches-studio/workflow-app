@@ -8,11 +8,15 @@ import {
   LiveMeetingRoom,
   LIVE_MEETING_ROOMS,
   TeamActivityItem,
-  TEAM_ACTIVITY_FEED
+  TEAM_ACTIVITY_FEED,
+  CalendarEvent,
+  INITIAL_CALENDAR_EVENTS
 } from '../components/SmartWorkplace/mockSmartHubData';
 
+import { useToastStore } from './useToastStore';
+
 export type AmbienceMode = 'warm' | 'neutral' | 'cold';
-export type TaskCategoryFilter = 'all' | 'in_progress' | 'review' | 'done';
+export type TaskCategoryFilter = 'all' | 'today' | 'upcoming' | 'high' | 'done' | 'in_progress' | 'review';
 
 interface SmartWorkplaceState {
   // Workplace Ambience & Focus Temperature
@@ -28,6 +32,9 @@ interface SmartWorkplaceState {
   resetSprintTimer: (durationSeconds?: number) => void;
   setSprintRemainingSeconds: (seconds: number) => void;
   setActiveSprintTaskId: (id: string) => void;
+  launchFocusForTask: (taskId: string, durationMinutes?: number) => void;
+  launchFocusForCalendarEvent: (event: CalendarEvent) => void;
+  onSprintCompleted: () => void;
 
   // Project Tasks & Workflow Overview
   tasks: ProductivityTask[];
@@ -46,6 +53,15 @@ interface SmartWorkplaceState {
   toggleMic: () => void;
   toggleVideo: () => void;
   setMeetingModalOpen: (open: boolean) => void;
+  addMeetingRoom: (newRoom: { title: string; category: string; topic: string; meetingUrl: string; platform?: 'google_meet' | 'zoom' | 'custom'; scheduledTime?: string }) => void;
+  updateMeetingUrl: (id: string, meetingUrl: string) => void;
+
+  // Interactive Calendar & Schedule
+  calendarEvents: CalendarEvent[];
+  calendarViewMode: 'week' | 'month';
+  setCalendarViewMode: (mode: 'week' | 'month') => void;
+  addCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => void;
+  markCalendarEventCompleted: (id: string) => void;
 
   // Executive Goals & Focus Mode Modal
   isFocusModalOpen: boolean;
@@ -91,6 +107,79 @@ export const useSmartWorkplaceStore = create<SmartWorkplaceState>((set) => ({
   setSprintRemainingSeconds: (seconds) => set({ sprintRemainingSeconds: seconds }),
   setActiveSprintTaskId: (id) => set({ activeSprintTaskId: id }),
 
+  launchFocusForTask: (taskId, durationMinutes = 25) => {
+    const durationSeconds = durationMinutes * 60;
+    set((state) => {
+      const targetTask = state.tasks.find((t) => t.id === taskId);
+      useToastStore.getState().showSuccess(
+        'Deep Focus Sprint Started! 🎯',
+        targetTask ? `Target deliverable: ${targetTask.title} (${durationMinutes}m)` : undefined
+      );
+      return {
+        activeSprintTaskId: taskId,
+        sprintDurationSeconds: durationSeconds,
+        sprintRemainingSeconds: durationSeconds,
+        isSprintRunning: true,
+        isFocusModalOpen: true,
+      };
+    });
+  },
+
+  launchFocusForCalendarEvent: (event) => {
+    const durationSeconds = (event.durationMinutes || 25) * 60;
+    set((state) => {
+      const taskId = event.taskId || state.activeSprintTaskId;
+      useToastStore.getState().showSuccess(
+        'Focus Block Launched! ⚡',
+        `Focus block: ${event.title} (${event.durationMinutes || 25}m)`
+      );
+      return {
+        activeSprintTaskId: taskId,
+        sprintDurationSeconds: durationSeconds,
+        sprintRemainingSeconds: durationSeconds,
+        isSprintRunning: true,
+        isFocusModalOpen: true,
+      };
+    });
+  },
+
+  onSprintCompleted: () => {
+    set((state) => {
+      const activeTask = state.tasks.find((t) => t.id === state.activeSprintTaskId);
+      useToastStore.getState().showSuccess(
+        'Focus Sprint Completed! 🏆',
+        activeTask ? `Sprint for "${activeTask.title}" finished. Block marked complete!` : 'Sprint completed!'
+      );
+
+      // Automatically mark matching calendar focus block completed
+      const updatedCalendar = state.calendarEvents.map((evt) => {
+        if (
+          evt.type === 'focus_block' &&
+          !evt.isCompleted &&
+          (evt.taskId === state.activeSprintTaskId || evt.title.toLowerCase().includes(activeTask?.title?.toLowerCase() || ''))
+        ) {
+          return { ...evt, isCompleted: true };
+        }
+        return evt;
+      });
+
+      // Also update task completion or progress
+      const updatedTasks = state.tasks.map((t) => {
+        if (t.id === state.activeSprintTaskId) {
+          return { ...t, progress: 100, status: 'done' as const };
+        }
+        return t;
+      });
+
+      return {
+        isSprintRunning: false,
+        sprintRemainingSeconds: 0,
+        calendarEvents: updatedCalendar,
+        tasks: updatedTasks,
+      };
+    });
+  },
+
   // Tasks
   tasks: INITIAL_PRODUCTIVITY_TASKS,
   taskFilter: 'all',
@@ -123,6 +212,7 @@ export const useSmartWorkplaceStore = create<SmartWorkplaceState>((set) => ({
         avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
       },
     };
+    useToastStore.getState().showSuccess('Task Added! ✅', task.title);
     return { tasks: [task, ...state.tasks] };
   }),
 
@@ -136,6 +226,79 @@ export const useSmartWorkplaceStore = create<SmartWorkplaceState>((set) => ({
   toggleMic: () => set((state) => ({ isMicMuted: !state.isMicMuted })),
   toggleVideo: () => set((state) => ({ isVideoOn: !state.isVideoOn })),
   setMeetingModalOpen: (open) => set({ isMeetingModalOpen: open }),
+
+  addMeetingRoom: (newRoom) => set((state) => {
+    let platform: 'google_meet' | 'zoom' | 'custom' = newRoom.platform || 'custom';
+    if (newRoom.meetingUrl.includes('meet.google.com')) platform = 'google_meet';
+    else if (newRoom.meetingUrl.includes('zoom.us')) platform = 'zoom';
+
+    const room: LiveMeetingRoom = {
+      id: `room-${Date.now()}`,
+      title: newRoom.title,
+      category: newRoom.category || 'Executive Suite',
+      status: 'upcoming',
+      participantCount: 1,
+      participants: [
+        {
+          name: 'Maria Zakharova',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+          role: 'Host',
+        }
+      ],
+      previewImageUrl: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=900&auto=format&fit=crop&q=80',
+      topic: newRoom.topic || 'Ad-hoc Team Sync',
+      duration: 'Scheduled',
+      isScreenSharing: false,
+      meetingUrl: newRoom.meetingUrl,
+      platform,
+      scheduledTime: newRoom.scheduledTime || 'Today, Upcoming',
+      date: 'Today',
+    };
+
+    useToastStore.getState().showSuccess('Meeting Sync Created! 📹', `Room "${room.title}" ready.`);
+    return {
+      meetingRooms: [room, ...state.meetingRooms],
+      activeMeetingId: room.id,
+    };
+  }),
+
+  updateMeetingUrl: (id, meetingUrl) => set((state) => {
+    let platform: 'google_meet' | 'zoom' | 'custom' = 'custom';
+    if (meetingUrl.includes('meet.google.com')) platform = 'google_meet';
+    else if (meetingUrl.includes('zoom.us')) platform = 'zoom';
+
+    return {
+      meetingRooms: state.meetingRooms.map((r) =>
+        r.id === id ? { ...r, meetingUrl, platform } : r
+      ),
+    };
+  }),
+
+  // Interactive Calendar & Schedule
+  calendarEvents: INITIAL_CALENDAR_EVENTS,
+  calendarViewMode: 'week',
+  setCalendarViewMode: (mode) => set({ calendarViewMode: mode }),
+  addCalendarEvent: (event) => set((state) => {
+    const newEvent: CalendarEvent = {
+      ...event,
+      id: `cal-${Date.now()}`,
+    };
+    useToastStore.getState().showSuccess('Calendar Event Added! 📅', newEvent.title);
+    return { calendarEvents: [...state.calendarEvents, newEvent] };
+  }),
+  markCalendarEventCompleted: (id) => set((state) => {
+    const target = state.calendarEvents.find((e) => e.id === id);
+    const newStatus = target ? !target.isCompleted : true;
+    useToastStore.getState().showSuccess(
+      newStatus ? 'Block Completed! ✅' : 'Block Marked Active',
+      target?.title
+    );
+    return {
+      calendarEvents: state.calendarEvents.map((evt) =>
+        evt.id === id ? { ...evt, isCompleted: newStatus } : evt
+      ),
+    };
+  }),
 
   // Goals & Focus Modal
   isFocusModalOpen: false,

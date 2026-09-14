@@ -34,7 +34,8 @@ export const MobileDevicePanel: React.FC = () => {
     setSprintRemainingSeconds,
     tasks,
     toggleTaskCompletion,
-    activityFeed
+    activityFeed,
+    onSprintCompleted
   } = useSmartWorkplaceStore();
 
   // Active task derived
@@ -44,14 +45,15 @@ export const MobileDevicePanel: React.FC = () => {
   useEffect(() => {
     if (!isSprintRunning) return;
     const interval = setInterval(() => {
-      if (sprintRemainingSeconds > 0) {
+      if (sprintRemainingSeconds > 1) {
         setSprintRemainingSeconds(sprintRemainingSeconds - 1);
-      } else {
-        toggleSprintTimer();
+      } else if (sprintRemainingSeconds === 1) {
+        setSprintRemainingSeconds(0);
+        onSprintCompleted();
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [isSprintRunning, sprintRemainingSeconds, setSprintRemainingSeconds, toggleSprintTimer]);
+  }, [isSprintRunning, sprintRemainingSeconds, setSprintRemainingSeconds, onSprintCompleted]);
 
   // Ambience colors
   const accentHex = ambienceMode === 'warm' 
