@@ -88,14 +88,20 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ currentView, onSelectVie
           })}
         </nav>
 
-        {/* Workspace Quick Mode Banner */}
+        {/* Workspace Status Badge */}
         <div className="mt-8 p-4 rounded-2xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/10 shadow-inner">
-          <div className="flex items-center gap-2 text-xs font-semibold text-white mb-1">
-            <Sparkles className="w-3.5 h-3.5 text-orange-400" />
-            <span>HQ Sensor Grid</span>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-white">
+              <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+              <span>Workspace Status</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[9px] font-mono text-emerald-400 font-medium tracking-wide uppercase">Optimal</span>
+            </div>
           </div>
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            All 18 workplace IoT nodes operational. Security shield active.
+            18 team members active. All workspace services operational.
           </p>
         </div>
       </div>
