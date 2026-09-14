@@ -1,7 +1,7 @@
 // src/components/SmartWorkplace/TopAmbienceBar.tsx
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Flame, SunMedium, Snowflake } from 'lucide-react';
+import { Flame, Users, Zap } from 'lucide-react';
 import { useSmartWorkplaceStore, AmbienceMode } from '../../store/useSmartWorkplaceStore';
 
 interface AmbienceOption {
@@ -12,9 +12,9 @@ interface AmbienceOption {
 }
 
 const OPTIONS: AmbienceOption[] = [
-  { id: 'warm', label: 'Warm', icon: Flame, accentColor: '#F97316' },
-  { id: 'neutral', label: 'Neutral', icon: SunMedium, accentColor: '#F59E0B' },
-  { id: 'cold', label: 'Cold', icon: Snowflake, accentColor: '#38BDF8' },
+  { id: 'warm', label: 'Deep Focus', icon: Flame, accentColor: '#F97316' },
+  { id: 'neutral', label: 'Collaborative', icon: Users, accentColor: '#F59E0B' },
+  { id: 'cold', label: 'Crisp Flow', icon: Zap, accentColor: '#38BDF8' },
 ];
 
 export const TopAmbienceBar: React.FC = () => {

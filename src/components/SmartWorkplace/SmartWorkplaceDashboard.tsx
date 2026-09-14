@@ -32,13 +32,13 @@ export const SmartWorkplaceDashboard: React.FC = () => {
       <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 pt-2">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            <span>Workplace Atmosphere</span>
+            <span>Workplace Productivity Hub</span>
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 capitalize">
-              {ambienceMode} Mode
+              {ambienceMode === 'warm' ? 'Deep Focus' : ambienceMode === 'neutral' ? 'Collaborative' : 'Crisp Flow'}
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Connected to Zurich HQ Main Light & Audio Grid • 21.4°C Ambient
+            Real-time team activity, active sprint deliverables & live meeting rooms
           </p>
         </div>
 

@@ -13,30 +13,53 @@ export interface WorkspaceMember {
   assignedSpaces?: string[];
 }
 
-export interface SecurityCamera {
-  id: string;
-  name: string;
-  location: string;
-  status: 'live' | 'recording' | 'standby';
-  fps: number;
-  resolution: string;
-  lastUpdated: string;
-  imageUrl: string;
-  isAudioEnabled: boolean;
-}
-
-export interface AudioTrack {
+export interface ProductivityTask {
   id: string;
   title: string;
-  artist: string;
-  album: string;
-  duration: number; // in seconds
-  coverUrl: string;
+  project: string;
+  client: string;
+  priority: 'high' | 'medium' | 'low';
+  progress: number; // 0-100
+  status: 'todo' | 'in_progress' | 'review' | 'done';
+  dueDate: string;
+  assignee: {
+    name: string;
+    avatarUrl: string;
+  };
 }
 
-export interface EnergyDataPoint {
+export interface LiveMeetingRoom {
+  id: string;
+  title: string;
+  category: string;
+  status: 'live' | 'upcoming' | 'ended';
+  participantCount: number;
+  participants: {
+    name: string;
+    avatarUrl: string;
+    role: string;
+    isSpeaking?: boolean;
+    isMuted?: boolean;
+  }[];
+  previewImageUrl: string;
+  topic: string;
+  duration: string;
+  isScreenSharing: boolean;
+}
+
+export interface TeamActivityItem {
+  id: string;
+  user: string;
+  avatarUrl: string;
+  action: string;
+  target: string;
+  timeAgo: string;
+}
+
+export interface ProductivityHourData {
   day: string;
-  kwh: number;
+  billableHours: number;
+  totalHours: number;
   isPeak?: boolean;
 }
 
@@ -46,12 +69,12 @@ export const INITIAL_WORKSPACE_MEMBERS: WorkspaceMember[] = [
     fullName: 'Maria Zakharova',
     email: 'maria.z@workhub.io',
     role: 'admin',
-    department: 'Operations & Facilities',
+    department: 'Operations & Engineering',
     status: 'active',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     joinedDate: 'Jan 2024',
     location: 'Zurich HQ',
-    assignedSpaces: ['All Rooms', 'Security Grid', 'CCTV Server'],
+    assignedSpaces: ['All Projects', 'Security Grid', 'Approvals'],
   },
   {
     id: 'mem-2',
@@ -63,19 +86,19 @@ export const INITIAL_WORKSPACE_MEMBERS: WorkspaceMember[] = [
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     joinedDate: 'Mar 2024',
     location: 'London Studio',
-    assignedSpaces: ['Conference Room A', 'Development Lab'],
+    assignedSpaces: ['Mobile Wallet MVP', 'API Infrastructure'],
   },
   {
     id: 'mem-3',
     fullName: 'Sarah Jenkins',
     email: 'sarah@acmestudio.design',
     role: 'manager',
-    department: 'Design & Creative',
+    department: 'Design & Creative Ops',
     status: 'active',
     avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
     joinedDate: 'Apr 2024',
     location: 'Berlin Hub',
-    assignedSpaces: ['Design Lounge', 'Audio Suite'],
+    assignedSpaces: ['Brand Identity Portal', 'Design Systems'],
   },
   {
     id: 'mem-4',
@@ -87,102 +110,186 @@ export const INITIAL_WORKSPACE_MEMBERS: WorkspaceMember[] = [
     avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
     joinedDate: 'May 2024',
     location: 'Stockholm Office',
-    assignedSpaces: ['Focus Pods'],
+    assignedSpaces: ['User Journey Tests'],
   },
   {
     id: 'mem-5',
     fullName: 'Alex Rivera',
     email: 'alex.rivera@workhub.io',
     role: 'member',
-    department: 'Security & Automation',
+    department: 'Backend Architecture',
     status: 'pending',
     avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     joinedDate: 'Invited 2d ago',
     location: 'Remote',
-    assignedSpaces: ['Access Control'],
+    assignedSpaces: ['Cloud Security'],
   },
 ];
 
-export const SECURITY_CAMERAS: SecurityCamera[] = [
+export const INITIAL_PRODUCTIVITY_TASKS: ProductivityTask[] = [
   {
-    id: 'cam-1',
-    name: 'Kitchen & Barista Lounge',
-    location: 'West Wing • 1st Floor',
+    id: 'task-1',
+    title: 'Brand Portal Design System Overhaul',
+    project: 'Brand Identity & Web Portal',
+    client: 'Acme Design Studio',
+    priority: 'high',
+    progress: 75,
+    status: 'in_progress',
+    dueDate: 'Tomorrow, 5:00 PM',
+    assignee: {
+      name: 'Maria Z.',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+    },
+  },
+  {
+    id: 'task-2',
+    title: 'Biometric Auth & FaceID Flow',
+    project: 'Mobile Crypto Wallet MVP',
+    client: 'FinTech Labs Inc.',
+    priority: 'high',
+    progress: 90,
+    status: 'review',
+    dueDate: 'In 2 days',
+    assignee: {
+      name: 'David S.',
+      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80',
+    },
+  },
+  {
+    id: 'task-3',
+    title: 'Automated Invoice PDF Engine',
+    project: 'Internal Platform Tooling',
+    client: 'WorkHub Core',
+    priority: 'medium',
+    progress: 60,
+    status: 'in_progress',
+    dueDate: 'Sep 18',
+    assignee: {
+      name: 'Sarah J.',
+      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
+    },
+  },
+  {
+    id: 'task-4',
+    title: 'Shopify Plus Custom App Webhooks',
+    project: 'E-Commerce Expansion',
+    client: 'Nordic Style Living',
+    priority: 'low',
+    progress: 35,
+    status: 'todo',
+    dueDate: 'Sep 22',
+    assignee: {
+      name: 'Elena R.',
+      avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&auto=format&fit=crop&q=80',
+    },
+  },
+];
+
+export const LIVE_MEETING_ROOMS: LiveMeetingRoom[] = [
+  {
+    id: 'room-alpha',
+    title: 'Sprint Design Review',
+    category: 'Studio Alpha',
     status: 'live',
-    fps: 30,
-    resolution: '4K Ultra HD',
-    lastUpdated: 'Live Feed',
-    // Contemporary open luxury kitchen / office lounge
-    imageUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=900&auto=format&fit=crop&q=80',
-    isAudioEnabled: true,
+    participantCount: 5,
+    participants: [
+      {
+        name: 'Maria Zakharova',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+        role: 'Presenter',
+        isSpeaking: true,
+      },
+      {
+        name: 'David Sterling',
+        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80',
+        role: 'Tech Lead',
+        isMuted: false,
+      },
+      {
+        name: 'Sarah Jenkins',
+        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
+        role: 'Design Lead',
+        isMuted: true,
+      },
+      {
+        name: 'Elena Rostova',
+        avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&auto=format&fit=crop&q=80',
+        role: 'Observer',
+        isMuted: true,
+      },
+    ],
+    // High-end modern glass meeting space / video presentation
+    previewImageUrl: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=900&auto=format&fit=crop&q=80',
+    topic: 'Q3 Mobile Architecture & Deliverables Sign-off',
+    duration: '24:18',
+    isScreenSharing: true,
   },
   {
-    id: 'cam-2',
-    name: 'Executive Boardroom',
-    location: 'Main Tower • Floor 4',
+    id: 'room-beta',
+    title: 'Client Workshop Sync',
+    category: 'Executive Suite',
     status: 'live',
-    fps: 30,
-    resolution: '4K Ultra HD',
-    lastUpdated: 'Live Feed',
-    // High-end minimalist boardroom
-    imageUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&auto=format&fit=crop&q=80',
-    isAudioEnabled: false,
+    participantCount: 3,
+    participants: [
+      {
+        name: 'Sarah Jenkins',
+        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
+        role: 'Host',
+        isSpeaking: false,
+      },
+    ],
+    previewImageUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&auto=format&fit=crop&q=80',
+    topic: 'Acme Design Brand Guidelines Review',
+    duration: '11:05',
+    isScreenSharing: false,
   },
   {
-    id: 'cam-3',
-    name: 'Atrium & Entrance',
-    location: 'Ground Level • Lobby Gate',
-    status: 'live',
-    fps: 60,
-    resolution: '4K HDR',
-    lastUpdated: 'Live Feed',
-    // Sleek modern architectural glass facade
-    imageUrl: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=900&auto=format&fit=crop&q=80',
-    isAudioEnabled: true,
+    id: 'room-gamma',
+    title: 'Daily Standup & Huddle',
+    category: 'Dev Lounge',
+    status: 'upcoming',
+    participantCount: 8,
+    participants: [],
+    previewImageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=900&auto=format&fit=crop&q=80',
+    topic: 'Blocker Removal & API Endpoint Release',
+    duration: 'Scheduled in 30m',
+    isScreenSharing: false,
   },
 ];
 
-export const AUDIO_PLAYLIST: AudioTrack[] = [
+export const TEAM_ACTIVITY_FEED: TeamActivityItem[] = [
   {
-    id: 'track-1',
-    title: 'Blinding Lights',
-    artist: 'The Weeknd',
-    album: 'After Hours',
-    duration: 200,
-    coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&auto=format&fit=crop&q=80',
+    id: 'act-1',
+    user: 'David S.',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&auto=format&fit=crop&q=80',
+    action: 'approved pull request on',
+    target: 'Auth Biometric V2',
+    timeAgo: '4m ago',
   },
   {
-    id: 'track-2',
-    title: 'Solar Echoes',
-    artist: 'Tycho',
-    album: 'Epoch Ambient',
-    duration: 245,
-    coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&auto=format&fit=crop&q=80',
+    id: 'act-2',
+    user: 'Sarah J.',
+    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&auto=format&fit=crop&q=80',
+    action: 'exported client invoice for',
+    target: 'Acme Studio ($4,250)',
+    timeAgo: '18m ago',
   },
   {
-    id: 'track-3',
-    title: 'Midnight City',
-    artist: 'M83',
-    album: 'Hurry Up, We’re Dreaming',
-    duration: 243,
-    coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300&auto=format&fit=crop&q=80',
+    id: 'act-3',
+    user: 'Maria Z.',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80',
+    action: 'started 45m deep focus on',
+    target: 'Design Tokens Overhaul',
+    timeAgo: 'Just now',
   },
 ];
 
-export const ENERGY_WEEKLY_DATA: EnergyDataPoint[] = [
-  { day: 'Mon', kwh: 14.8 },
-  { day: 'Tue', kwh: 19.4, isPeak: true },
-  { day: 'Wed', kwh: 17.6 },
-  { day: 'Thu', kwh: 16.2 },
-  { day: 'Fri', kwh: 20.1, isPeak: true },
-  { day: 'Sat', kwh: 11.5 },
-  { day: 'Sun', kwh: 9.8 },
-];
-
-export const SMART_ROOMS = [
-  { id: 'bathroom', name: 'Bathroom', count: 4, active: true },
-  { id: 'living', name: 'Living Room', count: 8, active: true },
-  { id: 'kitchen', name: 'Kitchen Bar', count: 6, active: true },
-  { id: 'conference', name: 'Conference A', count: 12, active: false },
-  { id: 'terrace', name: 'Sky Terrace', count: 3, active: false },
+export const PRODUCTIVITY_HOURS_DATA: ProductivityHourData[] = [
+  { day: 'Mon', billableHours: 6.2, totalHours: 7.5 },
+  { day: 'Tue', billableHours: 7.8, totalHours: 8.5, isPeak: true },
+  { day: 'Wed', billableHours: 6.5, totalHours: 7.8 },
+  { day: 'Thu', billableHours: 5.9, totalHours: 7.0 },
+  { day: 'Fri', billableHours: 8.1, totalHours: 8.9, isPeak: true },
+  { day: 'Sat', billableHours: 2.5, totalHours: 3.0 },
+  { day: 'Sun', billableHours: 1.5, totalHours: 1.8 },
 ];

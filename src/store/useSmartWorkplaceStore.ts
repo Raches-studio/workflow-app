@@ -3,164 +3,162 @@ import { create } from 'zustand';
 import { 
   WorkspaceMember, 
   INITIAL_WORKSPACE_MEMBERS, 
-  SECURITY_CAMERAS, 
-  AUDIO_PLAYLIST, 
-  AudioTrack,
-  SecurityCamera
+  ProductivityTask,
+  INITIAL_PRODUCTIVITY_TASKS,
+  LiveMeetingRoom,
+  LIVE_MEETING_ROOMS,
+  TeamActivityItem,
+  TEAM_ACTIVITY_FEED
 } from '../components/SmartWorkplace/mockSmartHubData';
 
 export type AmbienceMode = 'warm' | 'neutral' | 'cold';
-export type ScenarioTab = 'Rooms' | 'Devices' | 'Security' | 'Calendar';
+export type TaskCategoryFilter = 'all' | 'in_progress' | 'review' | 'done';
 
 interface SmartWorkplaceState {
-  // Ambience Theme
+  // Workplace Ambience & Focus Temperature
   ambienceMode: AmbienceMode;
   setAmbienceMode: (mode: AmbienceMode) => void;
 
-  // Speaker / Lighting Control
-  speakerPower: boolean;
-  speakerVolume: number; // 0 - 100
-  speakerLightLevel: number; // 0 - 100
-  isMuted: boolean;
-  toggleSpeakerPower: () => void;
-  setSpeakerVolume: (val: number) => void;
-  setSpeakerLightLevel: (val: number) => void;
-  toggleMute: () => void;
+  // Mobile Focus Sprint Timer
+  isSprintRunning: boolean;
+  sprintRemainingSeconds: number; // 25 min = 1500 seconds
+  sprintDurationSeconds: number;
+  activeSprintTaskId: string;
+  toggleSprintTimer: () => void;
+  resetSprintTimer: (durationSeconds?: number) => void;
+  setSprintRemainingSeconds: (seconds: number) => void;
+  setActiveSprintTaskId: (id: string) => void;
 
-  // Music Player
-  isPlaying: boolean;
-  playbackProgress: number; // seconds
-  currentTrackIndex: number;
-  isLiked: boolean;
-  isDisliked: boolean;
-  isShuffle: boolean;
-  isRepeat: boolean;
-  togglePlay: () => void;
-  setPlaybackProgress: (seconds: number) => void;
-  nextTrack: () => void;
-  prevTrack: () => void;
-  toggleLike: () => void;
-  toggleDislike: () => void;
-  toggleShuffle: () => void;
-  toggleRepeat: () => void;
-  currentTrack: () => AudioTrack;
+  // Project Tasks & Workflow Overview
+  tasks: ProductivityTask[];
+  taskFilter: TaskCategoryFilter;
+  setTaskFilter: (filter: TaskCategoryFilter) => void;
+  toggleTaskCompletion: (taskId: string) => void;
+  addNewTask: (task: { title: string; project: string; client: string; priority: 'high' | 'medium' | 'low'; dueDate: string }) => void;
 
-  // Scenario & Rooms
-  activeScenarioTab: ScenarioTab;
-  setActiveScenarioTab: (tab: ScenarioTab) => void;
-  activeRoomId: string;
-  setActiveRoomId: (id: string) => void;
-  customRooms: { id: string; name: string }[];
-  addCustomRoom: (name: string) => void;
+  // Live Meeting Room & Video Call
+  activeMeetingId: string;
+  setActiveMeetingId: (id: string) => void;
+  meetingRooms: LiveMeetingRoom[];
+  isMicMuted: boolean;
+  isVideoOn: boolean;
+  isMeetingModalOpen: boolean;
+  toggleMic: () => void;
+  toggleVideo: () => void;
+  setMeetingModalOpen: (open: boolean) => void;
 
-  // Security Feeds
-  activeCameraId: string;
-  setActiveCameraId: (id: string) => void;
-  cameras: SecurityCamera[];
-  isCameraAudioOn: boolean;
-  toggleCameraAudio: () => void;
-
-  // Night Mode
-  isNightModeActive: boolean;
-  isNightModeModalOpen: boolean;
-  nightSettings: {
-    softLighting: boolean;
-    autoLock: boolean;
-    cameraHighAlert: boolean;
-    targetTemp: number; // in Celsius (e.g., 20)
+  // Executive Goals & Focus Mode Modal
+  isFocusModalOpen: boolean;
+  setFocusModalOpen: (open: boolean) => void;
+  dailyGoalProgress: {
+    completedDeliverables: number;
+    totalDeliverables: number;
+    loggedHours: number;
+    unbilledAmount: number;
   };
-  setNightModeModalOpen: (open: boolean) => void;
-  toggleNightModeActive: () => void;
-  updateNightSettings: (updates: Partial<SmartWorkplaceState['nightSettings']>) => void;
+  incrementGoalDeliverable: () => void;
 
   // Team & Workspace
   members: WorkspaceMember[];
+  activityFeed: TeamActivityItem[];
   isInviteModalOpen: boolean;
   setInviteModalOpen: (open: boolean) => void;
   inviteMember: (newMember: { fullName: string; email: string; role: 'admin' | 'manager' | 'member'; department: string }) => void;
   updateMemberRole: (memberId: string, role: 'admin' | 'manager' | 'member') => void;
   removeMember: (memberId: string) => void;
 
-  // Navigation Sub-tab
+  // Navigation
   activeSubView: 'dashboard' | 'team';
   setActiveSubView: (view: 'dashboard' | 'team') => void;
 }
 
-export const useSmartWorkplaceStore = create<SmartWorkplaceState>((set, get) => ({
+export const useSmartWorkplaceStore = create<SmartWorkplaceState>((set) => ({
   // Ambience
   ambienceMode: 'warm',
   setAmbienceMode: (mode) => set({ ambienceMode: mode }),
 
-  // Speaker
-  speakerPower: true,
-  speakerVolume: 75,
-  speakerLightLevel: 75,
-  isMuted: false,
-  toggleSpeakerPower: () => set((state) => ({ speakerPower: !state.speakerPower })),
-  setSpeakerVolume: (val) => set({ speakerVolume: Math.max(0, Math.min(100, val)) }),
-  setSpeakerLightLevel: (val) => set({ speakerLightLevel: Math.max(0, Math.min(100, val)) }),
-  toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
+  // Mobile Focus Sprint
+  isSprintRunning: true,
+  sprintRemainingSeconds: 1245, // 20m 45s remaining
+  sprintDurationSeconds: 1500, // 25m Pomodoro block
+  activeSprintTaskId: 'task-1',
+  toggleSprintTimer: () => set((state) => ({ isSprintRunning: !state.isSprintRunning })),
+  resetSprintTimer: (durationSeconds = 1500) => set({
+    sprintDurationSeconds: durationSeconds,
+    sprintRemainingSeconds: durationSeconds,
+    isSprintRunning: false,
+  }),
+  setSprintRemainingSeconds: (seconds) => set({ sprintRemainingSeconds: seconds }),
+  setActiveSprintTaskId: (id) => set({ activeSprintTaskId: id }),
 
-  // Music Player
-  isPlaying: true,
-  playbackProgress: 84, // 1:24
-  currentTrackIndex: 0,
-  isLiked: true,
-  isDisliked: false,
-  isShuffle: false,
-  isRepeat: false,
-  togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
-  setPlaybackProgress: (seconds) => set({ playbackProgress: seconds }),
-  nextTrack: () => set((state) => ({
-    currentTrackIndex: (state.currentTrackIndex + 1) % AUDIO_PLAYLIST.length,
-    playbackProgress: 0,
-    isPlaying: true,
+  // Tasks
+  tasks: INITIAL_PRODUCTIVITY_TASKS,
+  taskFilter: 'all',
+  setTaskFilter: (filter) => set({ taskFilter: filter }),
+  toggleTaskCompletion: (taskId) => set((state) => ({
+    tasks: state.tasks.map((t) => {
+      if (t.id === taskId) {
+        const isDone = t.status === 'done';
+        return {
+          ...t,
+          status: isDone ? 'in_progress' : 'done',
+          progress: isDone ? 70 : 100,
+        };
+      }
+      return t;
+    }),
   })),
-  prevTrack: () => set((state) => ({
-    currentTrackIndex: (state.currentTrackIndex - 1 + AUDIO_PLAYLIST.length) % AUDIO_PLAYLIST.length,
-    playbackProgress: 0,
-    isPlaying: true,
-  })),
-  toggleLike: () => set((state) => ({ isLiked: !state.isLiked, isDisliked: false })),
-  toggleDislike: () => set((state) => ({ isDisliked: !state.isDisliked, isLiked: false })),
-  toggleShuffle: () => set((state) => ({ isShuffle: !state.isShuffle })),
-  toggleRepeat: () => set((state) => ({ isRepeat: !state.isRepeat })),
-  currentTrack: () => AUDIO_PLAYLIST[get().currentTrackIndex] || AUDIO_PLAYLIST[0],
+  addNewTask: (newTask) => set((state) => {
+    const task: ProductivityTask = {
+      id: `task-${Date.now()}`,
+      title: newTask.title,
+      project: newTask.project || 'Active Client Project',
+      client: newTask.client || 'WorkHub Direct',
+      priority: newTask.priority,
+      progress: 10,
+      status: 'in_progress',
+      dueDate: newTask.dueDate || 'Next Week',
+      assignee: {
+        name: 'Maria Z.',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+      },
+    };
+    return { tasks: [task, ...state.tasks] };
+  }),
 
-  // Scenario
-  activeScenarioTab: 'Rooms',
-  setActiveScenarioTab: (tab) => set({ activeScenarioTab: tab }),
-  activeRoomId: 'bathroom',
-  setActiveRoomId: (id) => set({ activeRoomId: id }),
-  customRooms: [],
-  addCustomRoom: (name) => set((state) => ({
-    customRooms: [...state.customRooms, { id: `room-${Date.now()}`, name }],
-  })),
+  // Live Meetings
+  activeMeetingId: 'room-alpha',
+  setActiveMeetingId: (id) => set({ activeMeetingId: id }),
+  meetingRooms: LIVE_MEETING_ROOMS,
+  isMicMuted: false,
+  isVideoOn: true,
+  isMeetingModalOpen: false,
+  toggleMic: () => set((state) => ({ isMicMuted: !state.isMicMuted })),
+  toggleVideo: () => set((state) => ({ isVideoOn: !state.isVideoOn })),
+  setMeetingModalOpen: (open) => set({ isMeetingModalOpen: open }),
 
-  // Security
-  activeCameraId: 'cam-1',
-  setActiveCameraId: (id) => set({ activeCameraId: id }),
-  cameras: SECURITY_CAMERAS,
-  isCameraAudioOn: true,
-  toggleCameraAudio: () => set((state) => ({ isCameraAudioOn: !state.isCameraAudioOn })),
-
-  // Night Mode
-  isNightModeActive: false,
-  isNightModeModalOpen: false,
-  nightSettings: {
-    softLighting: true,
-    autoLock: true,
-    cameraHighAlert: true,
-    targetTemp: 19.5,
+  // Goals & Focus Modal
+  isFocusModalOpen: false,
+  setFocusModalOpen: (open) => set({ isFocusModalOpen: open }),
+  dailyGoalProgress: {
+    completedDeliverables: 4,
+    totalDeliverables: 6,
+    loggedHours: 6.5,
+    unbilledAmount: 1420,
   },
-  setNightModeModalOpen: (open) => set({ isNightModeModalOpen: open }),
-  toggleNightModeActive: () => set((state) => ({ isNightModeActive: !state.isNightModeActive })),
-  updateNightSettings: (updates) => set((state) => ({
-    nightSettings: { ...state.nightSettings, ...updates },
+  incrementGoalDeliverable: () => set((state) => ({
+    dailyGoalProgress: {
+      ...state.dailyGoalProgress,
+      completedDeliverables: Math.min(
+        state.dailyGoalProgress.totalDeliverables,
+        state.dailyGoalProgress.completedDeliverables + 1
+      ),
+    },
   })),
 
   // Team
   members: INITIAL_WORKSPACE_MEMBERS,
+  activityFeed: TEAM_ACTIVITY_FEED,
   isInviteModalOpen: false,
   setInviteModalOpen: (open) => set({ isInviteModalOpen: open }),
   inviteMember: (newMember) => set((state) => {
@@ -175,12 +173,12 @@ export const useSmartWorkplaceStore = create<SmartWorkplaceState>((set, get) => 
       fullName: newMember.fullName,
       email: newMember.email,
       role: newMember.role,
-      department: newMember.department || 'General Workspace',
+      department: newMember.department || 'Engineering Team',
       status: 'pending',
       avatarUrl: randomAvatar,
       joinedDate: 'Just now',
       location: 'Remote',
-      assignedSpaces: ['General Access'],
+      assignedSpaces: ['General Workspace'],
     };
     return { members: [member, ...state.members], isInviteModalOpen: false };
   }),

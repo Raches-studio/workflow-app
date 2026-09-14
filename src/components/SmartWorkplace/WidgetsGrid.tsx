@@ -1,8 +1,8 @@
 // src/components/SmartWorkplace/WidgetsGrid.tsx
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, HardDrive, Maximize2, TrendingDown } from 'lucide-react';
-import { ENERGY_WEEKLY_DATA } from './mockSmartHubData';
+import { Clock, HardDrive, Maximize2, TrendingUp } from 'lucide-react';
+import { PRODUCTIVITY_HOURS_DATA } from './mockSmartHubData';
 
 export const WidgetsGrid: React.FC = () => {
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
@@ -14,18 +14,18 @@ export const WidgetsGrid: React.FC = () => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       
-      {/* 1. Energy Use Widget */}
+      {/* 1. Team Productivity Hours Widget */}
       <div className="relative rounded-3xl p-5 bg-[#161920]/80 border border-white/10 backdrop-blur-xl shadow-2xl hover:border-white/20 transition-all duration-300 flex flex-col justify-between">
         
         {/* Header Strip */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400 shadow-sm">
-              <Zap className="w-4 h-4" />
+              <Clock className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-xs font-semibold text-white">Energy Use</h4>
-              <p className="text-[10px] text-slate-400">This week</p>
+              <h4 className="text-xs font-semibold text-white">Productivity Hours</h4>
+              <p className="text-[10px] text-slate-400">Team sprint velocity</p>
             </div>
           </div>
 
@@ -37,20 +37,21 @@ export const WidgetsGrid: React.FC = () => {
         {/* Big Metric Display */}
         <div className="my-2 flex items-baseline justify-between">
           <div>
-            <span className="text-2xl font-bold font-mono text-white tracking-tight">18.2</span>
-            <span className="ml-1 text-xs font-semibold text-orange-400">kWh</span>
+            <span className="text-2xl font-bold font-mono text-white tracking-tight">38.5</span>
+            <span className="ml-1 text-xs font-semibold text-orange-400">hrs</span>
+            <span className="block text-[10px] text-slate-400 font-medium">18.2 billable hours</span>
           </div>
           <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-0.5 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-            <TrendingDown className="w-3 h-3" />
-            -4.2%
+            <TrendingUp className="w-3 h-3" />
+            +12.4%
           </span>
         </div>
 
         {/* Animated 7-Day Vertical Bar Chart */}
         <div className="mt-2 pt-2 border-t border-white/5">
           <div className="flex items-end justify-between gap-1.5 h-20 px-1">
-            {ENERGY_WEEKLY_DATA.map((item) => {
-              const heightPercent = Math.round((item.kwh / 24) * 100);
+            {PRODUCTIVITY_HOURS_DATA.map((item) => {
+              const heightPercent = Math.round((item.totalHours / 10) * 100);
               const isHovered = hoveredDay === item.day;
 
               return (
@@ -62,7 +63,7 @@ export const WidgetsGrid: React.FC = () => {
                 >
                   {/* Tooltip on hover */}
                   <div className={`text-[9px] font-mono transition-opacity ${isHovered ? 'opacity-100 text-orange-400 font-bold' : 'opacity-0'}`}>
-                    {item.kwh}
+                    {item.totalHours}h
                   </div>
 
                   {/* Bar Column */}
@@ -91,7 +92,7 @@ export const WidgetsGrid: React.FC = () => {
 
       </div>
 
-      {/* 2. Storage Widget */}
+      {/* 2. Cloud Storage & Asset Usage Widget */}
       <div className="relative rounded-3xl p-5 bg-[#161920]/80 border border-white/10 backdrop-blur-xl shadow-2xl hover:border-white/20 transition-all duration-300 flex flex-col justify-between">
         
         {/* Header Strip */}
@@ -101,8 +102,8 @@ export const WidgetsGrid: React.FC = () => {
               <HardDrive className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-xs font-semibold text-white">Storage</h4>
-              <p className="text-[10px] text-slate-400">All home & cloud data</p>
+              <h4 className="text-xs font-semibold text-white">Cloud Storage & Assets</h4>
+              <p className="text-[10px] text-slate-400">Team drive & archives</p>
             </div>
           </div>
 
@@ -118,7 +119,7 @@ export const WidgetsGrid: React.FC = () => {
             <span className="text-xs font-semibold text-slate-400">/ {storageTotal} GB</span>
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            {storageTotal - storageUsed} GB available space
+            {storageTotal - storageUsed} GB available workspace capacity
           </p>
         </div>
 
@@ -138,15 +139,15 @@ export const WidgetsGrid: React.FC = () => {
           <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] text-slate-400">
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-              <span>CCTV 340G</span>
+              <span>Design 340G</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-              <span>System 210G</span>
+              <span>Deliver 210G</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-              <span>Files 270G</span>
+              <span>Repos 270G</span>
             </div>
           </div>
         </div>
