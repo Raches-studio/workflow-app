@@ -1,5 +1,5 @@
 // src/components/SmartWorkplace/CalendarScheduleView.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar as CalendarIcon, 
@@ -22,7 +22,51 @@ import { useSmartWorkplaceStore } from '../../store/useSmartWorkplaceStore';
 import { useToastStore } from '../../store/useToastStore';
 import { CalendarEvent } from './mockSmartHubData';
 
-const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const WEEK_COLUMN_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+// Helper to determine if an event matches a particular Date object
+function eventMatchesDate(event: CalendarEvent, targetDate: Date): boolean {
+  const today = new Date();
+  
+  // 1. Direct YYYY-MM-DD match
+  if (event.date && event.date.includes('-')) {
+    const [y, m, d] = event.date.split('-').map(Number);
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      return (
+        targetDate.getFullYear() === y &&
+        targetDate.getMonth() === m - 1 &&
+        targetDate.getDate() === d
+      );
+    }
+  }
+
+  // 2. Relative 'Today' string
+  if (event.date === 'Today') {
+    return (
+      targetDate.getFullYear() === today.getFullYear() &&
+      targetDate.getMonth() === today.getMonth() &&
+      targetDate.getDate() === today.getDate()
+    );
+  }
+
+  // 3. Relative 'Tomorrow' string
+  if (event.date === 'Tomorrow') {
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    return (
+      targetDate.getFullYear() === tomorrow.getFullYear() &&
+      targetDate.getMonth() === tomorrow.getMonth() &&
+      targetDate.getDate() === tomorrow.getDate()
+    );
+  }
+
+  // 4. Match by day of week (0: Sun, 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat)
+  if (typeof event.dayOfWeek === 'number') {
+    return targetDate.getDay() === event.dayOfWeek;
+  }
+
+  return false;
+}
 
 export const CalendarScheduleView: React.FC = () => {
   const { 
@@ -37,6 +81,11 @@ export const CalendarScheduleView: React.FC = () => {
 
   const { showSuccess, showReminder } = useToastStore();
 
+  // Dynamic system time & navigation state via native JavaScript Date
+  const [currentNavDate, setCurrentNavDate] = useState<Date>(() => new Date());
+  const [activeMonthDate, setActiveMonthDate] = useState<Date>(() => new Date());
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -44,13 +93,111 @@ export const CalendarScheduleView: React.FC = () => {
   // New Event Form State
   const [newType, setNewType] = useState<'meeting' | 'focus_block' | 'deadline'>('meeting');
   const [newTitle, setNewTitle] = useState('');
-  const [newDayOfWeek, setNewDayOfWeek] = useState<number>(1);
+  const [newDayOfWeek, setNewDayOfWeek] = useState<number>(() => new Date().getDay() || 2);
   const [newStartTime, setNewStartTime] = useState('11:00 AM');
   const [newEndTime, setNewEndTime] = useState('11:45 AM');
   const [newDuration, setNewDuration] = useState(45);
   const [newUrl, setNewUrl] = useState('https://meet.google.com/new-sync-room');
   const [newProject, setNewProject] = useState('Brand Identity & Web Portal');
   const [newDesc, setNewDesc] = useState('');
+
+  // Live real-time clock ticking every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Calculate the 7 days of the active week dynamically (Monday through Sunday)
+  const currentWeekDays = useMemo(() => {
+    const date = new Date(currentNavDate);
+    const day = date.getDay(); // 0: Sun, 1: Mon, 2: Tue...
+    const diffToMonday = day === 0 ? -6 : 1 - day; // Align Monday as start of work week
+    const monday = new Date(date);
+    monday.setDate(date.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+  }, [currentNavDate]);
+
+  // Dynamic Month Grid Matrix calculation using native Date methods
+  const monthMatrix = useMemo(() => {
+    const year = activeMonthDate.getFullYear();
+    const month = activeMonthDate.getMonth(); // 0-indexed: 8 is September
+    const monthTitle = activeMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    // Calculate start day of week and days in month
+    // September 1, 2026: new Date(2026, 8, 1).getDay() === 2 (Tuesday)
+    const firstDayOfWeek = new Date(year, month, 1).getDay();
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevMonthTotalDays = new Date(year, month, 0).getDate();
+
+    // Monday-first column offset (0: Mon, 1: Tue, 2: Wed, ..., 6: Sun)
+    // For Tue (firstDayOfWeek = 2), startOffset = 1 (column 1 = Tuesday)
+    const startOffset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+
+    const cells: { date: Date; isCurrentMonth: boolean; dayNum: number }[] = [];
+
+    // 1. Previous month trailing days
+    for (let i = startOffset - 1; i >= 0; i--) {
+      const date = new Date(year, month - 1, prevMonthTotalDays - i);
+      cells.push({ date, isCurrentMonth: false, dayNum: prevMonthTotalDays - i });
+    }
+
+    // 2. Current month active days
+    for (let i = 1; i <= totalDaysInMonth; i++) {
+      const date = new Date(year, month, i);
+      cells.push({ date, isCurrentMonth: true, dayNum: i });
+    }
+
+    // 3. Next month leading days to complete grid
+    const targetCellCount = cells.length <= 35 ? 35 : 42;
+    const remaining = targetCellCount - cells.length;
+    for (let i = 1; i <= remaining; i++) {
+      const date = new Date(year, month + 1, i);
+      cells.push({ date, isCurrentMonth: false, dayNum: i });
+    }
+
+    return { year, month, monthTitle, cells, firstDayOfWeek, totalDaysInMonth };
+  }, [activeMonthDate]);
+
+  // Week Navigation handlers
+  const handlePrevWeek = () => {
+    setCurrentNavDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 7);
+      return d;
+    });
+  };
+
+  const handleNextWeek = () => {
+    setCurrentNavDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 7);
+      return d;
+    });
+  };
+
+  const handleResetToToday = () => {
+    const now = new Date();
+    setCurrentNavDate(now);
+    setActiveMonthDate(now);
+    showSuccess('Jumped to Today 📍', now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }));
+  };
+
+  // Month Navigation handlers
+  const handlePrevMonth = () => {
+    setActiveMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setActiveMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
 
   // Copy link handler
   const handleCopyLink = (url: string, id: string) => {
@@ -68,10 +215,11 @@ export const CalendarScheduleView: React.FC = () => {
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
-  // Trigger simulated 5-minute reminder alert for testing
+  // Simulated meeting alert synced to current live system time
   const handleSimulateMeetingAlert = () => {
+    const timeString = currentTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     showReminder({
-      title: 'Sprint Architecture Sync in 5m',
+      title: `Upcoming Sync at ${timeString}`,
       message: 'Join David Sterling and the engineering team on Google Meet.',
       category: 'meeting',
       platform: 'google_meet',
@@ -92,10 +240,13 @@ export const CalendarScheduleView: React.FC = () => {
       else platform = 'custom';
     }
 
+    const today = new Date();
+    const isTodayChoice = newDayOfWeek === today.getDay();
+
     addCalendarEvent({
       title: newTitle.trim(),
       type: newType,
-      date: newDayOfWeek === 1 ? 'Today' : newDayOfWeek === 2 ? 'Tomorrow' : DAYS_OF_WEEK[newDayOfWeek - 1] || 'Upcoming',
+      date: isTodayChoice ? 'Today' : WEEK_COLUMN_NAMES[(newDayOfWeek + 6) % 7] || 'Upcoming',
       dayOfWeek: newDayOfWeek,
       startTime: newStartTime,
       endTime: newEndTime,
@@ -130,15 +281,27 @@ export const CalendarScheduleView: React.FC = () => {
                 </span>
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Unified schedule for Google Meet/Zoom syncs, project deadlines, and Focus Sprint blocks
+                Dynamic native system time sync, Google Meet/Zoom integration & Focus Block launcher
               </p>
             </div>
           </div>
         </div>
 
-        {/* View Mode Switcher & Actions */}
+        {/* Live System Time Clock & View Mode Switcher */}
         <div className="flex items-center gap-2.5 flex-wrap">
           
+          {/* Dynamic Live Local Clock Badge */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-black/40 border border-white/10 text-xs font-mono text-slate-300 shadow-inner">
+            <Clock className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+            <span className="font-semibold text-white">
+              {currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </span>
+            <span className="text-slate-500">•</span>
+            <span className="text-orange-400 font-bold">
+              {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          </div>
+
           {/* Quick Demo: Trigger 5m Meeting Alert */}
           <button
             onClick={handleSimulateMeetingAlert}
@@ -146,7 +309,7 @@ export const CalendarScheduleView: React.FC = () => {
             title="Simulate 5-minute pre-meeting reminder notification"
           >
             <Bell className="w-3.5 h-3.5 text-sky-400 animate-bounce" />
-            <span>Test 5m Reminder</span>
+            <span>5m Alert</span>
           </button>
 
           {/* Week / Month Switcher Tabs */}
@@ -184,37 +347,82 @@ export const CalendarScheduleView: React.FC = () => {
         </div>
       </div>
 
+      {/* Dynamic Date Controls Header (Navigation & Jump to Today) */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center gap-2">
+          {calendarViewMode === 'week' ? (
+            <div className="flex items-center gap-2 text-sm font-semibold text-white">
+              <span>Week of</span>
+              <span className="font-mono text-orange-400">
+                {currentWeekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
+                {currentWeekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm font-semibold text-white">
+              <span className="font-bold text-base">{monthMatrix.monthTitle}</span>
+              <span className="text-[10px] text-slate-400 font-mono">({monthMatrix.totalDaysInMonth} Days)</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleResetToToday}
+            className="px-3 py-1 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition"
+          >
+            Today
+          </button>
+          <button
+            onClick={calendarViewMode === 'week' ? handlePrevWeek : handlePrevMonth}
+            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white transition"
+            title="Previous"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={calendarViewMode === 'week' ? handleNextWeek : handleNextMonth}
+            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white transition"
+            title="Next"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       {/* View Switcher: Weekly vs Monthly */}
       {calendarViewMode === 'week' ? (
-        /* WEEKLY DETAILED SCHEDULE GRID */
+        /* DYNAMIC WEEKLY SCHEDULE GRID */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3.5">
-          {DAYS_OF_WEEK.map((dayName, idx) => {
-            const dayNum = idx + 1;
-            const isToday = dayNum === 1; // Monday represents today
-            const dayEvents = calendarEvents.filter((e) => e.dayOfWeek === dayNum);
+          {currentWeekDays.map((dateObj) => {
+            const isToday = dateObj.toDateString() === new Date().toDateString();
+            const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+            const dayNum = dateObj.getDate();
+            const monthShort = dateObj.toLocaleDateString('en-US', { month: 'short' });
+            const dayEvents = calendarEvents.filter((e) => eventMatchesDate(e, dateObj));
 
             return (
               <div 
-                key={dayName}
+                key={dateObj.toISOString()}
                 className={`flex flex-col min-h-[520px] rounded-3xl p-3.5 border transition-all duration-300 ${
                   isToday
                     ? 'bg-[#181C24] border-orange-500/40 shadow-xl shadow-orange-500/5 ring-1 ring-orange-500/20'
                     : 'bg-[#14171E]/80 border-white/10 hover:border-white/20'
                 }`}
               >
-                {/* Column Header */}
+                {/* Column Header with Dynamic Native JS Date Output */}
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
                   <div>
                     <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      {dayName.substring(0, 3)}
+                      {dayName}
                     </div>
                     <div className="text-sm font-extrabold font-mono text-white mt-0.5">
-                      {14 + idx} <span className="text-[10px] text-slate-500 font-normal">Sep</span>
+                      {dayNum} <span className="text-[10px] text-slate-500 font-normal">{monthShort}</span>
                     </div>
                   </div>
 
                   {isToday ? (
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-500 text-white uppercase tracking-wider shadow-sm shadow-orange-500/30">
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-500 text-white uppercase tracking-wider shadow-sm shadow-orange-500/30 animate-pulse">
                       Today
                     </span>
                   ) : (
@@ -365,7 +573,7 @@ export const CalendarScheduleView: React.FC = () => {
                       <span>No events</span>
                       <button
                         onClick={() => {
-                          setNewDayOfWeek(dayNum);
+                          setNewDayOfWeek(dateObj.getDay());
                           setIsAddEventModalOpen(true);
                         }}
                         className="mt-1 text-[10px] text-orange-400/80 hover:text-orange-400 font-semibold"
@@ -381,58 +589,53 @@ export const CalendarScheduleView: React.FC = () => {
           })}
         </div>
       ) : (
-        /* MONTHLY CALENDAR GRID MATRIX */
+        /* ACCURATE DYNAMIC MONTHLY CALENDAR GRID MATRIX */
         <div className="p-6 rounded-3xl bg-[#161920]/80 border border-white/10 backdrop-blur-xl shadow-2xl">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <span className="text-base font-bold text-white">September 2026</span>
-              <span className="text-xs text-slate-400 font-mono">Q3 Sprint Cycle</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition">
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition">
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-2">
-            {DAYS_OF_WEEK.map((d) => (
+          {/* Month Header Days (Mon, Tue, Wed, Thu, Fri, Sat, Sun) */}
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {WEEK_COLUMN_NAMES.map((d) => (
               <div key={d} className="text-center py-1 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 {d.substring(0, 3)}
               </div>
             ))}
+          </div>
 
-            {Array.from({ length: 35 }).map((_, i) => {
-              const dayNum = i - 1; // Start from previous month offset
-              const isCurrentMonth = dayNum > 0 && dayNum <= 30;
-              const matchingDayOfWeek = (i % 7) + 1;
-              const matchingEvents = calendarEvents.filter((e) => e.dayOfWeek === matchingDayOfWeek);
+          {/* 35/42 Cell Dynamic Grid */}
+          <div className="grid grid-cols-7 gap-2">
+            {monthMatrix.cells.map((cell, i) => {
+              const isToday = cell.date.toDateString() === new Date().toDateString();
+              const matchingEvents = calendarEvents.filter((e) => eventMatchesDate(e, cell.date));
 
               return (
                 <div
                   key={i}
-                  className={`min-h-[90px] p-2 rounded-2xl border transition-all flex flex-col justify-between ${
-                    dayNum === 14
-                      ? 'bg-orange-500/10 border-orange-500/40 ring-1 ring-orange-500/20'
-                      : isCurrentMonth
+                  className={`min-h-[92px] p-2.5 rounded-2xl border transition-all flex flex-col justify-between ${
+                    isToday
+                      ? 'bg-orange-500/15 border-orange-500/50 ring-1 ring-orange-500/30 shadow-lg shadow-orange-500/10'
+                      : cell.isCurrentMonth
                       ? 'bg-white/[0.02] border-white/5 hover:bg-white/[0.05] hover:border-white/15'
                       : 'bg-transparent border-transparent opacity-30'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`text-xs font-mono font-bold ${dayNum === 14 ? 'text-orange-400' : 'text-slate-400'}`}>
-                      {isCurrentMonth ? dayNum : ''}
+                    <span className={`text-xs font-mono font-bold ${
+                      isToday 
+                        ? 'text-orange-400 font-black' 
+                        : cell.isCurrentMonth 
+                        ? 'text-slate-300' 
+                        : 'text-slate-600'
+                    }`}>
+                      {cell.dayNum}
                     </span>
-                    {dayNum === 14 && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+                    {isToday && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-orange-500 text-white uppercase tracking-wider shadow-sm shadow-orange-500/40">
+                        Today
+                      </span>
                     )}
                   </div>
 
                   {/* Micro event indicators in cell */}
-                  {isCurrentMonth && (
+                  {cell.isCurrentMonth && (
                     <div className="space-y-1 my-1">
                       {matchingEvents.slice(0, 2).map((evt) => (
                         <div
@@ -441,17 +644,22 @@ export const CalendarScheduleView: React.FC = () => {
                             if (evt.type === 'focus_block') launchFocusForCalendarEvent(evt);
                             else setSelectedEvent(evt);
                           }}
-                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold truncate cursor-pointer ${
+                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold truncate cursor-pointer transition ${
                             evt.type === 'focus_block'
-                              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:border-orange-500/60'
                               : evt.type === 'meeting'
-                              ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 hover:border-sky-500/60'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:border-amber-500/60'
                           }`}
                         >
                           {evt.title}
                         </div>
                       ))}
+                      {matchingEvents.length > 2 && (
+                        <div className="text-[8px] font-mono text-slate-400 pl-1">
+                          +{matchingEvents.length - 2} more
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -562,9 +770,13 @@ export const CalendarScheduleView: React.FC = () => {
                       onChange={(e) => setNewDayOfWeek(Number(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/15 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                     >
-                      {DAYS_OF_WEEK.map((d, i) => (
-                        <option key={d} value={i + 1}>{d}</option>
-                      ))}
+                      <option value={1}>Monday</option>
+                      <option value={2}>Tuesday</option>
+                      <option value={3}>Wednesday</option>
+                      <option value={4}>Thursday</option>
+                      <option value={5}>Friday</option>
+                      <option value={6}>Saturday</option>
+                      <option value={0}>Sunday</option>
                     </select>
                   </div>
 

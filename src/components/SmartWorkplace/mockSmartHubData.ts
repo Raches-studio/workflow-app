@@ -297,7 +297,7 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
     title: 'Sprint Design Review',
     type: 'meeting',
     date: 'Today',
-    dayOfWeek: 1, // Monday
+    dayOfWeek: 2, // Tuesday (Today)
     startTime: '10:00 AM',
     endTime: '11:00 AM',
     durationMinutes: 60,
@@ -311,7 +311,7 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
     title: 'Deep Focus Sprint: Biometric Auth',
     type: 'focus_block',
     date: 'Today',
-    dayOfWeek: 1,
+    dayOfWeek: 2, // Tuesday (Today)
     startTime: '11:30 AM',
     endTime: '12:15 PM',
     durationMinutes: 45,
@@ -325,7 +325,7 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
     title: 'Client Workshop Sync',
     type: 'meeting',
     date: 'Today',
-    dayOfWeek: 1,
+    dayOfWeek: 2, // Tuesday (Today)
     startTime: '02:30 PM',
     endTime: '03:30 PM',
     durationMinutes: 60,
@@ -339,7 +339,7 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
     title: 'Brand Portal CSS Tokens Delivery',
     type: 'deadline',
     date: 'Tomorrow',
-    dayOfWeek: 2, // Tuesday
+    dayOfWeek: 3, // Wednesday (Tomorrow)
     startTime: '05:00 PM',
     endTime: '05:00 PM',
     durationMinutes: 0,
@@ -352,7 +352,7 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
     title: 'Deep Focus Sprint: Invoice PDF Engine',
     type: 'focus_block',
     date: 'Tomorrow',
-    dayOfWeek: 2,
+    dayOfWeek: 3, // Wednesday (Tomorrow)
     startTime: '09:00 AM',
     endTime: '09:45 AM',
     durationMinutes: 45,
@@ -365,8 +365,8 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
     id: 'cal-6',
     title: 'Cross-Team Architecture Sync',
     type: 'meeting',
-    date: 'Wednesday',
-    dayOfWeek: 3,
+    date: 'Thursday',
+    dayOfWeek: 4, // Thursday
     startTime: '03:00 PM',
     endTime: '03:45 PM',
     durationMinutes: 45,
@@ -379,8 +379,8 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
     id: 'cal-7',
     title: 'Deep Focus Sprint: Token Systems',
     type: 'focus_block',
-    date: 'Thursday',
-    dayOfWeek: 4,
+    date: 'Friday',
+    dayOfWeek: 5, // Friday
     startTime: '01:00 PM',
     endTime: '01:30 PM',
     durationMinutes: 30,
