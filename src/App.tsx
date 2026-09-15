@@ -245,12 +245,12 @@ export function App() {
               </div>
 
               {/* Navigation Pill Strip (Shown on all screen sizes for fast switching) */}
-              <nav className="flex items-center gap-1 overflow-x-auto py-0.5 max-w-full">
+              <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 max-w-full scroll-smooth">
                 <button
                   onClick={() => setActiveScreen('dashboard')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
                     activeScreen === 'dashboard'
-                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm shadow-orange-500/20'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -262,19 +262,19 @@ export function App() {
                   onClick={() => setActiveScreen('calendar')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
                     activeScreen === 'calendar'
-                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm shadow-orange-500/20'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>Schedule</span>
+                  <span>Schedule & Calendar</span>
                 </button>
 
                 <button
                   onClick={() => setActiveScreen('team')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
                     activeScreen === 'team'
-                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm shadow-orange-500/20'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -286,7 +286,7 @@ export function App() {
                   onClick={() => setActiveScreen('projects')}
                   className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
                     activeScreen === 'projects'
-                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm shadow-orange-500/20'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -298,7 +298,7 @@ export function App() {
                   onClick={() => setActiveScreen('tracker')}
                   className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
                     activeScreen === 'tracker'
-                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm shadow-orange-500/20'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -311,7 +311,7 @@ export function App() {
                     onClick={() => setActiveScreen('invoices')}
                     className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 ${
                       activeScreen === 'invoices'
-                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm shadow-orange-500/20'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
@@ -325,7 +325,7 @@ export function App() {
                     onClick={() => setActiveScreen('approvals')}
                     className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition shrink-0 relative ${
                       activeScreen === 'approvals'
-                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm'
+                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm shadow-orange-500/20'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >

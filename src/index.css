@@ -12,4 +12,15 @@
   .font-mono {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Custom utility to completely hide scrollbars cross-browser while preserving scrollability */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+    width: 0px;
+    height: 0px;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
