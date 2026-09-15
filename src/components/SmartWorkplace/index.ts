@@ -10,5 +10,7 @@ export * from './WidgetsGrid';
 export * from './TeamWorkspaceView';
 export * from './InviteMemberModal';
 export * from './CalendarScheduleView';
+export * from './MeetingsView';
+export * from './TasksView';
 export * from './FloatingNotificationTray';
 export * from './mockSmartHubData';

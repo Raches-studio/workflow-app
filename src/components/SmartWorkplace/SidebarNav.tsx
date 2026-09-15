@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, 
   Calendar,
+  Video,
+  CheckSquare2,
   Briefcase, 
   BarChart3, 
   Users, 
@@ -12,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useSmartWorkplaceStore } from '../../store/useSmartWorkplaceStore';
 
-export type MainNavView = 'dashboard' | 'calendar' | 'projects' | 'analytics' | 'team';
+export type MainNavView = 'dashboard' | 'calendar' | 'meetings' | 'tasks' | 'projects' | 'analytics' | 'team';
 
 interface SidebarNavProps {
   currentView: MainNavView;
@@ -26,6 +28,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ currentView, onSelectVie
   const NAV_ITEMS: { id: MainNavView; label: string; icon: React.ElementType; badge?: string | number }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'calendar', label: 'Schedule & Calendar', icon: Calendar },
+    { id: 'meetings', label: 'Calls & Meetings', icon: Video },
+    { id: 'tasks', label: 'To-Do & Tasks', icon: CheckSquare2 },
     { id: 'projects', label: 'Projects', icon: Briefcase },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'team', label: 'Team & Workspace', icon: Users, badge: pendingCount > 0 ? pendingCount : undefined },
